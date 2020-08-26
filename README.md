@@ -24,9 +24,11 @@ create table track_covid_result_match
     PAT_ID             varchar(20)  null,
     TEST_CODE          varchar(10)  null,
     RESULT             varchar(10)  null,
+    csv_file           varchar(255) null,
     constraint track_covid_result_match_TRACKCOVID_ID_uindex
         unique (TRACKCOVID_ID)
 );
+
 </pre>
 
 # WorkFlow
