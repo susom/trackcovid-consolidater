@@ -171,7 +171,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 			// 4, 4-Last Name
 			// 5, 5-Sample Date
 			if($record_mrn){
-				foreach($this->CSVRecords as $csvrecord){
+				foreach($this->CSVRecords as $idx =>  $csvrecord){
 					if($record_mrn == $csvrecord->getMRN()){
 						$checks[1] = 1;
 
@@ -204,6 +204,9 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
 							if($checks[1] && $checks[2] || 1){ //MATCH AT LEAST MRN + SAMPLEID 
 								$this->saveResult($lab, $record, $csvrecord, $checks); 
+							}else{
+								//TODO, this will be checked PER PROJECT (3+), only print out unmatched after all projects have had a turn?
+								$this->CSVRecords[$idx]->unmatched();
 							}
 						}
 
@@ -212,6 +215,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
 							if($checks[1] && $checks[5]){ //MATCH AT LEAST MRN + SAMPLEID 
 								$this->saveResult($lab, $record, $csvrecord, $checks); 
+							}else{
+								$this->CSVRecords[$idx]->unmatched();
 							}
 						}
 					}
@@ -282,6 +287,19 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 		//TODO , after all the projects have run through this processData, we can then discard the CSVs?
 		$this->emDebug("All the projects that have this module have run ProcessData.php, can now discard the CSVs?");
 		$this->truncateDb();  //DATA matched , can delete the data now
+        return;
+	}
+
+	/**
+     * Dump out Unmatched to file
+     */
+    public function processUnmatched() {
+	    $this->emDebug("Once all data is processed, any left over unmatched in any project should be dumped out to file");
+
+		$unmatched_data = array();
+        foreach( $this->CSVRecords as $csvrecord ){
+
+		}
         return;
 	}
 }

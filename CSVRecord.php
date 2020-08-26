@@ -5,6 +5,7 @@ namespace Stanford\TrackCovidConsolidator;
 class CSVRecord {
     private $csv_data;
     private $institution;
+    private $unmatched;
 
     public function __construct($rowdata, $inst) {
         $this->institution  = $inst;
@@ -83,5 +84,11 @@ class CSVRecord {
     public function getResult(){
         $result = $this->csv_data[14];
         return strtoupper($result);
+    }
+
+    public function unmatched(){
+        //TODO how to make sure this stays current to current project
+        $this->unmatched = true;
+        return ;
     }
 }
