@@ -1,9 +1,9 @@
 {
-	"name": "ClassNameHere",
+	"name": "Track Covid Consolidator",
 
-	"namespace": "Stanford\\ClassNameHere",
+	"namespace": "Stanford\\TrackCovidConsolidator",
 
-	"description": "A template for a REDCap External Module",
+	"description": "An EM to consolidate CSV data from UCSF / Stanford into Various TrackCovid Redcap Project Records",
 
 	"documentation": "README.md",
 
@@ -11,6 +11,16 @@
 		{
 			"name": "Andrew Martin",
 			"email": "andy123@stanford.edu",
+			"institution": "Stanford University"
+		},
+		{
+			"name": "Irvin Szeto",
+			"email": "irvins@stanford.edu",
+			"institution": "Stanford University"
+		},
+		{
+			"name": "Lee Ann Yasukawa",
+			"email": "yasukawa@stanford.edu",
 			"institution": "Stanford University"
 		}
 	],
@@ -21,11 +31,17 @@
 		"redcap_module_save_configuration"
 	],
 	
+	"framework-version": 4,
+
 	"enable-every-page-hooks-on-system-pages": false,	
 
 	"links": {
 		"project": [
-
+			{
+				"name": "Process Data for this Project",
+				"icon": "gear",
+				"url": "pages/processData.php"
+			}
 		],
 		"control-center": [
 
