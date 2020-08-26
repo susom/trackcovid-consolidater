@@ -71,6 +71,16 @@
 		}
 	],
 
+	"crons": [
+		{
+			"cron_name": "csv_check",
+			"cron_description": "Cron that checks for new CSV data in REDCap Temp",
+			"method": "processData",
+			"cron_frequency": "3600",
+			"cron_max_run_time": "300"
+		}
+	],
+
 	"compatibility": {
 		"php-version-min": "",
 		"php-version-max": "",

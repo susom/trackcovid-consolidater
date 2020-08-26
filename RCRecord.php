@@ -1,5 +1,4 @@
 <?php
-
 namespace Stanford\TrackCovidConsolidator;
 /** @var TrackCovidConsolidator $module */
 
