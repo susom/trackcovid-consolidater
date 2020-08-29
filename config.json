@@ -26,50 +26,103 @@
 	],
 
 	"permissions": [
-		"redcap_module_system_enable",
-		"redcap_module_project_enable",
-		"redcap_module_save_configuration"
 	],
-	
-	"framework-version": 4,
 
-	"enable-every-page-hooks-on-system-pages": false,	
+	"framework-version": 4,
 
 	"links": {
 		"project": [
 			{
-				"name": "Process Data for this Project",
+				"name": "Process Data for all Projects",
 				"icon": "gear",
-				"url": "pages/processData.php"
+				"url": "pages/controlPanel.php"
 			}
 		],
 		"control-center": [
 
 		]
 	},
-
 	"no-auth-pages": [
-
+        "pages/findResults"
 	],
-
 	"project-settings": [
 		{
 			"key": "enable-project-debug-logging",
 			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
 			"required": false,
 			"type": "checkbox"
-		}
-	],
-
-
+		},
+        {
+            "key": "birth-date",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Birth date</span></h6>Field which stores the birthdate",
+            "required": true,
+            "type": "field-list"
+        },
+        {
+            "key": "stanford-mrn",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Stanford MRN</span></h6>Field which stores the Stanford mrn",
+            "required": true,
+            "type": "field-list"
+        },
+        {
+            "key": "ucsf-mrn",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>UCSF MRN</span></h6>Field which stores the UCSF mrn",
+            "required": true,
+            "type": "field-list"
+        },
+        {
+            "key": "baseline-event",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Event</span></h6>Event where the MRN and DoB reside",
+            "required": true,
+            "type": "event-list"
+        },
+        {
+            "key": "lab-fields",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Lab Result configurations</span></h6>Enter the parameters for each group of labs that we need to match results to",
+            "type": "sub_settings",
+            "repeatable": true,
+            "sub_settings": [
+                {
+                    "key": "fields",
+                    "name": "<h6><span class='text-lg badge badge-lg badge-success'>List of fields</span></h6>Comma separated list of appointment/results fields that are grouped together for a set of labs in the following order: 1. date_of_visit, 2. location_collected, 3. pcr_id, 4. igg_id",
+                    "required": true,
+                    "type": "textarea"
+                }
+            ]
+        }
+    ],
 	"system-settings": [
 		{
 			"key": "enable-system-debug-logging",
 			"name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
 			"required": false,
 			"type": "checkbox"
-		}
-	],
+		},
+        {
+            "key": "data-url",
+            "name": "<b>Data Retrieval URL</b><br>Enter the URL of the API call used to request STARR data retrieval",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "chart-pid",
+            "name": "<b>PID of Chart Project</b><br>Select the Chart Project",
+            "required": true,
+            "type": "project-id"
+        },
+        {
+            "key": "proto-pid",
+            "name": "<b>PID of Proto Project</b><br>Select the Proto Project",
+            "required": true,
+            "type": "project-id"
+        },
+        {
+            "key": "genpop-pid",
+            "name": "<b>PID of Gen Pop Project</b><br>Select the Gen Pop Project",
+            "required": true,
+            "type": "project-id"
+        }
+    ],
 
 	"crons": [
 		{

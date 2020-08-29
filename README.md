@@ -6,14 +6,15 @@ An EM to consolidate CSV data from UCSF / Stanford into Various TrackCovid Redca
 
 TODO : Need to figure out where to get daily data from (CRON checks of BOX?)
 
-Create a table in the REDCap Mysql Server to buffer the data from CSV
+Create a table in the REDCap Mysql Server to buffer the lab result data from the CSV files
 
 <pre>
 create table track_covid_result_match
 (
     TRACKCOVID_ID      varchar(100) not null,
-    PAT_MRN_ID         int          not null,
-    PAT_NAME           varchar(50)  not null,
+    PAT_ID             varchar(20)  null,
+    PAT_MRN_ID         varchar(10)  not null,
+    PAT_NAME           varchar(100) not null,
     BIRTH_DATE         date         null,
     SPEC_TAKEN_INSTANT datetime     null,
     RESULT_INSTANT     datetime     null,
@@ -21,14 +22,44 @@ create table track_covid_result_match
     COMPONENT_NAME     varchar(50)  null,
     COMPONENT_ABBR     varchar(5)   null,
     ORD_VALUE          varchar(20)  null,
-    PAT_ID             varchar(20)  null,
     TEST_CODE          varchar(10)  null,
     RESULT             varchar(10)  null,
-    csv_file           varchar(255) null,
+    MPI_ID             varchar(50) null,
     constraint track_covid_result_match_TRACKCOVID_ID_uindex
         unique (TRACKCOVID_ID)
 );
+</pre>
 
+Also, create a table in the REDCap Mysql Server to buffer the Redcap records for each project
+to make it easier to query.
+
+<pre>
+create table track_covid_project_records (
+    record_id                   varchar(10),
+    redcap_event_name           varchar(50),
+    dob                         date,
+    mrn                         varchar(10),
+    date_collected              date,
+    location                    int,
+    pcr_id                      varchar(20),
+    igg_id                      varchar(20),
+    lra_pcr_result              int,
+    lra_pcr_date                datetime,
+    lra_pcr_match_methods___1   int,
+    lra_pcr_match_methods___2   int,
+    lra_pcr_match_methods___3   int,
+    lra_pcr_match_methods___4   int,
+    lra_pcr_match_methods___5   int,
+    lra_ab_result               int,
+    lra_ab_date                 datetime,
+    lra_ab_match_methods___1    int,
+    lra_ab_match_methods___2    int,
+    lra_ab_match_methods___3    int,
+    lra_ab_match_methods___4    int,
+    lra_ab_match_methods___5    int,
+        constraint track_covid_project_records_uindex
+            unique (record_id, redcap_event_name)
+);
 </pre>
 
 # WorkFlow
