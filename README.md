@@ -1,6 +1,11 @@
 # TrackCovidConsolidator
 
 An EM to consolidate CSV data from UCSF / Stanford into Various TrackCovid Redcap Project Records
+Right now, there is a path to call the Stanford process which will bring over a new data file in realtime
+using REDCap to STARR link.  To initiate this process, call trackcovid-consolidater->loadStanfordData.
+
+There is another path to load the UCSF data file.  This process can be initiated by calling
+trackcovid-consolidater->loadUCSFData($filename).  The filename and path needs to be specified.
 
 # Processing data to REDCap
 
