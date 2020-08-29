@@ -71,19 +71,25 @@ if ($org == 'STANFORD') {
 $birthdate_field = $module->getProjectSetting('birth-date');
 $baseline_event = $module->getProjectSetting('baseline-event');
 
-// Store the record_id, birth_date and mrn in a table track_covid_phi_data
+// Store the record_id, birth_date and mrn in a table track_covid_mrn_dob
 $phi = array($mrn_field, $birthdate_field);
-
-$module->truncateDb($db_phi_table);
 $filter = "[". $mrn_field . "] <> ''";
 $records = getProjectRecords($phi, $filter, $baseline_event);
 
-// Load the database with the redcap record_id/event_names
+// Load the database with the record_id/mrn/dob combination so we can cross-reference this table across events
 if (empty($records)) {
     $module->emDebug("There are no records in project " . $pid . ". Skipping processing");
     return true;
 }
+
+// Clear out all the database tables before we begin so we have consistent data
+$module->truncateDb($db_phi_table);
+$module->truncateDb($dbtable);
+$module->truncateDb($results_table);
+
 $module->pushDataIntoDB($db_phi_table, 'record_id,redcap_event_name,mrn,dob', $records);
+$module->emDebug("Loaded " . count($records) . " demographics records into track_covid_mrn_dob table");
+
 
 /**
  * Now loop over all configs and look for lab results
@@ -131,7 +137,7 @@ foreach($configs as $fields => $list) {
 
 }
 
-return status;
+return $status;
 
 
 /**
@@ -397,35 +403,37 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
                     ' where (date_collected != "" and date_collected is not null)';
     $q = db_query($sql);
 
-    // Now put together the SQL to load this PCR data into a temp table so we can merge into the results table
-    // based on record_id and redcap_event_name
-    $module->truncateDb($temp_table);
-    $module->pushDataIntoDB($temp_table, $headers_pcr, $all_pcr_results);
-    $sql =
-        'UPDATE track_covid_found_results fr ' .
+    if (!empty($all_pcr_results)) {
+        // Now put together the SQL to load this PCR data into a temp table so we can merge into the results table
+        // based on record_id and redcap_event_name
+        $module->truncateDb($temp_table);
+        $module->pushDataIntoDB($temp_table, $headers_pcr, $all_pcr_results);
+        $sql =
+            'UPDATE track_covid_found_results fr ' .
             ' INNER JOIN ' .
             ' track_covid_temp temp ON fr.record_id = temp.record_id and fr.redcap_event_name = temp.redcap_event_name ' .
             ' SET ' .
-                ' fr.lra_pcr_date = temp.lra_pcr_date, ' .
-                ' fr.lra_pcr_result = temp.lra_pcr_result, ' .
-                ' fr.lra_pcr_match_methods___1 = temp.lra_pcr_match_methods___1, ' .
-                ' fr.lra_pcr_match_methods___2 = temp.lra_pcr_match_methods___2, ' .
-                ' fr.lra_pcr_match_methods___3 = temp.lra_pcr_match_methods___3, ' .
-                ' fr.lra_pcr_match_methods___4 = temp.lra_pcr_match_methods___4, ' .
-                ' fr.lra_pcr_match_methods___5 = temp.lra_pcr_match_methods___5 ';
-    $q = db_query($sql);
-    //$module->emDebug("This is the result of merging PCR data into track_covid_found_results: " . $q);
+            ' fr.lra_pcr_date = temp.lra_pcr_date, ' .
+            ' fr.lra_pcr_result = temp.lra_pcr_result, ' .
+            ' fr.lra_pcr_match_methods___1 = temp.lra_pcr_match_methods___1, ' .
+            ' fr.lra_pcr_match_methods___2 = temp.lra_pcr_match_methods___2, ' .
+            ' fr.lra_pcr_match_methods___3 = temp.lra_pcr_match_methods___3, ' .
+            ' fr.lra_pcr_match_methods___4 = temp.lra_pcr_match_methods___4, ' .
+            ' fr.lra_pcr_match_methods___5 = temp.lra_pcr_match_methods___5 ';
+        $q = db_query($sql);
+        //$module->emDebug("This is the result of merging PCR data into track_covid_found_results: " . $q);
+    }
 
-
-    // Now put together the SQL to merge this IgG data into a temp table so we can merge into the results table
-    // based on record_id and redcap_event_name for IGG data
-    $module->truncateDb($temp_table);
-    $module->pushDataIntoDB($temp_table, $headers_ab, $all_ab_results);
-    $sql =
-        'UPDATE track_covid_found_results fr ' .
+    if (!empty($all_ab_results)) {
+        // Now put together the SQL to merge this IgG data into a temp table so we can merge into the results table
+        // based on record_id and redcap_event_name for IGG data
+        $module->truncateDb($temp_table);
+        $module->pushDataIntoDB($temp_table, $headers_ab, $all_ab_results);
+        $sql =
+            'UPDATE track_covid_found_results fr ' .
             ' INNER JOIN ' .
-                ' track_covid_temp temp ON fr.record_id = temp.record_id and fr.redcap_event_name = temp.redcap_event_name ' .
-        ' SET ' .
+            ' track_covid_temp temp ON fr.record_id = temp.record_id and fr.redcap_event_name = temp.redcap_event_name ' .
+            ' SET ' .
             ' fr.lra_ab_date = temp.lra_ab_date, ' .
             ' fr.lra_ab_result = temp.lra_ab_result, ' .
             ' fr.lra_ab_match_methods___1 = temp.lra_ab_match_methods___1, ' .
@@ -433,12 +441,12 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
             ' fr.lra_ab_match_methods___3 = temp.lra_ab_match_methods___3, ' .
             ' fr.lra_ab_match_methods___4 = temp.lra_ab_match_methods___4, ' .
             ' fr.lra_ab_match_methods___5 = temp.lra_ab_match_methods___5 ';
-    $q = db_query($sql);
-    //$module->emDebug("This is the result of merging IGG data into track_covid_found_results: " . $q);
-    $module->truncateDb($temp_table);
-
+        $q = db_query($sql);
+        //$module->emDebug("This is the result of merging IGG data into track_covid_found_results: " . $q);
+    }
 
     // Now download the <track_covid_found_results> table and prepare it to load into Redcap
+    $module->truncateDb($temp_table);
     $sql = 'select ' . $lra_all . ' from track_covid_found_results';
     $q = db_query($sql);
 

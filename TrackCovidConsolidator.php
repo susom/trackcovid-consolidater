@@ -142,8 +142,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
         // to the temporary directory in REDCap.
         // **** Switch this when not debugging ****//
-        $filename = APP_PATH_TEMP . 'Stanford_08272020.csv';
-        //$filename = $this->getStanfordTrackCovidResults($irb_pid);
+        //$filename = APP_PATH_TEMP . 'Stanford_08272020.csv';
+        $filename = $this->getStanfordTrackCovidResults($irb_pid);
 
         if ($filename == false) {
             $this->emError("Could not retrieve Stanford lab results for " . date('Y-m-d'));
