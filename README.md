@@ -67,6 +67,19 @@ create table track_covid_project_records (
 );
 </pre>
 
+This table will hold MRN/DOB data so we can join against all events even though the data is only in
+the Baseline event.
+<pre>
+
+create table track_covid_mrn_dob (
+    record_id               varchar(10) not null,
+    redcap_event_name       varchar(50),
+    mrn                     varchar(10) not null,
+    dob                     varchar(10)
+);
+
+</pre>
+
 # WorkFlow
 1. Install EM onto all relevant REDCap Projects
 1. On each project run CRON to kick off **processData** script
