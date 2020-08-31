@@ -87,7 +87,6 @@ if (empty($records)) {
     return true;
 }
 
-$phi_field_list = implode(',', $phi_fields);
 $module->pushDataIntoDB($db_phi_table, 'record_id,redcap_event_name,mrn,dob', $records);
 $module->emDebug("Loaded " . count($records) . " demographics records into track_covid_mrn_dob table");
 
@@ -113,9 +112,9 @@ foreach($configs as $fields => $list) {
 
     $loader_return_fields = explode(',',$autoload_field_list);
     $all_return_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $loader_return_fields);
-    $all_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $autoloader_fields);
+    $all_retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $autoloader_fields);
 
-    $records = getProjectRecords($all_fields, $filter, null, $all_return_fields);
+    $records = getProjectRecords($all_retrieval_fields, $filter, null, $all_return_fields);
 
     // Load the database with the redcap record_id/event_names
     if (empty($records)) {
@@ -227,18 +226,23 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
 
     // Replace all backslashs by blanks otherwise we can't load into the database
     // Sometimes there are backslashs put in the sample id fields and we want to delete them.
-    $results = str_replace("\\", '', $q);
-    $records = json_decode($results, true);
-
+    $records = json_decode($q, true);
+    $module->emDebug("There were " . count($records) . " records retrieved from getData");
 
     $data_to_save = array();
     foreach($records as $record) {
         $one_record = array();
         foreach($return_fields as $field) {
-            $one_record[] = $record[$field];
+            if (($field == 'pcr_id') or ($field == 'igg_id')) {
+                $one_record[] = stripslashes($record[$field]);
+                //$one_record[] = str_replace("\\", '', $record[$field]);
+            } else {
+                $one_record[] = $record[$field];
+            }
         }
         array_push($data_to_save, '("'. implode('","', $one_record) . '")');
     }
+    //$module->emDebug("Data to save: " . json_encode($data_to_save));
 
     return $data_to_save;
 }
@@ -284,7 +288,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     while ($results = db_fetch_assoc($q)) {
         array_push($pcr_result_array, '("'. implode('","', $results) . '")');
     }
-    //$module->emDebug("These are PCR matches on MRN/Sample ID: " . json_encode($pcr_result_array));
+    $module->emDebug("The number of PCR matches on MRN/Sample ID: " . count($pcr_result_array));
 
     // Now we are going to match as many records as we can on MRN/sample_id for IgG values
     $sql =
@@ -306,13 +310,13 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                     ' on mrn.record_id = pr.record_id and substr(rm.mpi_id, 1,8) = pr.igg_id ' .
         ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
         ' and rm.COMPONENT_ABBR = "IGG"';
-    $module->emDebug("IGG MRN/MPI_ID query: " . $sql);
+    $module->emDebug("IGG MRN/MPI_ID query : " . $sql);
 
     $q = db_query($sql);
     while ($results = db_fetch_assoc($q)) {
         array_push($ab_result_array, '("'. implode('","', $results) . '")');
     }
-    //$module->emDebug("These are IGG matches on MRN/Sample ID: " . json_encode($ab_result_array));
+    $module->emDebug("The number of IGG matches on MRN/Sample ID are: " . count($ab_result_array));
 
     // Now we are going to look for matches for results that do not have a sample id and
     // we will match on MRN/DoB/Encounter Date for PCR tests
@@ -343,7 +347,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     while ($results = db_fetch_assoc($q)) {
         array_push($pcr_result_array_2, '("'. implode('","', $results) . '")');
     }
-    //$module->emDebug("These are PCR matches on MRN/DoB/Encounter Date: " . json_encode($pcr_result_array_2));
+    $module->emDebug("The number of PCR matches on MRN/DoB/Encounter Date is: " . count($pcr_result_array_2));
 
 
     // This query is for results with a sample id so we match on MRN/DoB/Encounter for IgG results
@@ -374,13 +378,14 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     while ($results = db_fetch_assoc($q)) {
         array_push($ab_result_array_2, '("'. implode('","', $results) . '")');
     }
-    //$module->emDebug("These are IGG matches on MRN/DoB/Encounter Date: " . json_encode($ab_result_array_2));
+    $module->emDebug("The number of IGG matches on MRN/DoB/Encounter Date is: " . count($ab_result_array_2));
 
     // We have results for PCR and IgG, now we want to merge them for the same record ID/redcap_event_name
     // We are creating a copy of the records so we can easily tell which records have changed.
     $all_results = merge_all_results(array_merge($pcr_result_array, $pcr_result_array_2),
                                     array_merge($ab_result_array, $ab_result_array_2),
                                     $results_table,$pcr_field_list, $ab_field_list);
+    $module->emDebug("The number of records to update is: " . count($all_results));
 
     return $all_results;
 }
