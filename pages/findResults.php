@@ -55,7 +55,7 @@ if ($pid == $chart_pid) {
 } else if ($pid == $genpop_pid) {
     $this_proj = "GENPOP";
 } else {
-    $this->emError("This is not a TrackCovid project ($pid).  Please Disable this EM on this project");
+    $module->emError("This is not a TrackCovid project ($pid).  Please Disable this EM on this project");
     return false;
 }
 
@@ -71,10 +71,15 @@ if ($org == 'STANFORD') {
 $birthdate_field = $module->getProjectSetting('birth-date');
 $baseline_event = $module->getProjectSetting('baseline-event');
 
+// Clear out all the database tables before we begin so we have consistent data
+$module->truncateDb($db_phi_table);
+$module->truncateDb($dbtable);
+$module->truncateDb($results_table);
+
 // Store the record_id, birth_date and mrn in a table track_covid_mrn_dob
-$phi = array($mrn_field, $birthdate_field);
+$phi_fields = array('record_id', 'redcap_event_name', $mrn_field, $birthdate_field);
 $filter = "[". $mrn_field . "] <> ''";
-$records = getProjectRecords($phi, $filter, $baseline_event);
+$records = getProjectRecords($phi_fields, $filter, $baseline_event);
 
 // Load the database with the record_id/mrn/dob combination so we can cross-reference this table across events
 if (empty($records)) {
@@ -82,14 +87,9 @@ if (empty($records)) {
     return true;
 }
 
-// Clear out all the database tables before we begin so we have consistent data
-$module->truncateDb($db_phi_table);
-$module->truncateDb($dbtable);
-$module->truncateDb($results_table);
-
+$phi_field_list = implode(',', $phi_fields);
 $module->pushDataIntoDB($db_phi_table, 'record_id,redcap_event_name,mrn,dob', $records);
 $module->emDebug("Loaded " . count($records) . " demographics records into track_covid_mrn_dob table");
-
 
 /**
  * Now loop over all configs and look for lab results
@@ -110,14 +110,19 @@ foreach($configs as $fields => $list) {
 
     // Retrieve these fields from the REDCap project
     $module->truncateDb($dbtable);
-    $records = getProjectRecords(array_merge($field_array, $autoloader_fields), $filter. null);
-    //$module->emDebug("These are the records: " . json_encode($records));
+
+    $loader_return_fields = explode(',',$autoload_field_list);
+    $all_return_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $loader_return_fields);
+    $all_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $autoloader_fields);
+
+    $records = getProjectRecords($all_fields, $filter, null, $all_return_fields);
 
     // Load the database with the redcap record_id/event_names
     if (empty($records)) {
         $module->emDebug("There are no records that need processing for this config: " . $list['fields']);
     } else {
 
+        // Push the current project's data into the table
         $module->pushDataIntoDB($dbtable, $redcap_headers, $records);
 
         // Now both database tables are loaded.  Match the redcap records with the results
@@ -134,10 +139,9 @@ foreach($configs as $fields => $list) {
         // TODO: Check for changes so we can report out
 
     }
-
 }
 
-return $status;
+print $status;
 
 
 /**
@@ -188,8 +192,15 @@ function createRecordFilter($org, $org_options, $fields) {
 /**
  * Retrieve current project data and load into the database table so we can manipulate it
  */
-function getProjectRecords($fields, $filter, $event_id=null) {
+function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null) {
     global $module;
+
+    // If the fields we are expecting in return are the same fields that we are asking for, set them to the same
+    // This won't be the case when checkboxes are involved,  We will return how many options there are for each
+    // checkbox.
+    if (is_null($return_fields)) {
+        $return_fields = $fields;
+    }
 
     /**
       * We are retrieving record_id, mrn and dob into its own table so we can join against each event.
@@ -207,7 +218,7 @@ function getProjectRecords($fields, $filter, $event_id=null) {
     $params = array(
         'return_format' => 'json',
         'events'        => $event_id,
-        'fields'        => array_merge( array(REDCap::getRecordIdField()), $fields),
+        'fields'        => $fields,
         'filterLogic'   => $filter
     );
 
@@ -219,9 +230,14 @@ function getProjectRecords($fields, $filter, $event_id=null) {
     $results = str_replace("\\", '', $q);
     $records = json_decode($results, true);
 
+
     $data_to_save = array();
     foreach($records as $record) {
-        array_push($data_to_save, '("'. implode('","', $record) . '")');
+        $one_record = array();
+        foreach($return_fields as $field) {
+            $one_record[] = $record[$field];
+        }
+        array_push($data_to_save, '("'. implode('","', $one_record) . '")');
     }
 
     return $data_to_save;
@@ -287,7 +303,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
             ' from track_covid_result_match rm join track_covid_mrn_dob mrn ' .
                     ' on rm.pat_mrn_id = mrn.mrn ' .
                 ' join track_covid_project_records pr ' .
-                    ' on mrn.record_id = pr.record_id and rm.mpi_id = pr.igg_id ' .
+                    ' on mrn.record_id = pr.record_id and substr(rm.mpi_id, 1,8) = pr.igg_id ' .
         ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
         ' and rm.COMPONENT_ABBR = "IGG"';
     $module->emDebug("IGG MRN/MPI_ID query: " . $sql);
@@ -472,11 +488,12 @@ function saveResults($data_to_save) {
     global $module;
 
     $status = true;
+    //$module->emDebug("Dave to save: " . json_encode($data_to_save));
     $return = REDCap::saveData('json', json_encode($data_to_save), 'overwrite');
     $module->emDebug("This is return from save: " . json_encode($return));
 
-    if(empty($return["errors"])){
-        $this->emError("Error saving lab matches " . $return["errors"]);
+    if(!empty($return["errors"])){
+        $module->emError("Error saving lab matches " . $return["errors"]);
         $status = false;
     }
     return $status;
@@ -487,10 +504,12 @@ function saveResults($data_to_save) {
  * Dump out Unmatched to file
  */
 function processUnmatched() {
-    $this->emDebug("Once all data is processed, any left over unmatched in any project should be dumped out to file");
+    global $module;
+
+    $module->emDebug("Once all data is processed, any left over unmatched in any project should be dumped out to file");
 
     $unmatched_data = array();
-    foreach( $this->CSVRecords as $csvrecord ){
+    foreach( $module->CSVRecords as $csvrecord ){
 
     }
     return;
