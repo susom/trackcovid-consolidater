@@ -55,11 +55,10 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $this->emDebug("Finished reading file");
 
             // STUFF THIS CSV INTO TEMPORARY RC DB TABLE 'track_covid_result_match'
-            $this->pushDataIntoDB($db_results_table, $headers, $sql_value_array);
+            $status = $this->pushDataIntoDB($db_results_table, $headers, $sql_value_array);
 
             fclose($handle);
             $this->emDebug("Closed file $filename");
-            $status = true;
 
         } else {
             $this->emDebug("Could not open file $filename");
@@ -79,6 +78,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      * @param $data_array
      */
 	public function pushDataIntoDB($db_table, $headers, $data_array) {
+
+	    $status = false;
 
         try {
             $header_array = explode(',',$headers);
@@ -101,19 +102,15 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $msg = $e->getMessage();
             $this->emError("Exception thrown while loading database $db_table: " . $msg);
         }
+
+        return $status;
     }
 
 	/**
      * Once CSV DATA is handled for THIS project... it still needs to live for the other projects.
      */
     public function discardCSV($filename) {
-		//TODO  rename or DELETE?
-		$this->emDebug("all CSV data for " . $filename . " is buffered into DB, can delete.. or rename? then other projects can use the data from the RC table?");
-
-		// $r = rename($filename, $filename ."_bak");
-		// unlink($filename);
-
-        return;
+		unlink($filename);
 	}
 
 	/**
@@ -156,6 +153,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $this->processAllProjects();
 
             // TODO: Should the file be deleted from the temp directory?
+            $this->discardCSV($filename);
 
         }
 	}
@@ -221,16 +219,22 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      *
      * @param $filename
      */
-    public function loadUCSFData($filename) {
+    public function loadUCSFData() {
 
+        $this->emDebug("In loadUCSFData");
+
+        $filename = APP_PATH_TEMP . 'UCSF_08312020.csv';
         if ($filename == null) {
             $this->emError("Could not retrieve UCSF lab results for " . date('Y-m-d'). ' Filename is ' . $filename);
         } else {
-            $this->emDebug("Starting to load UCSF lab results");
+            $this->emDebug("Starting to load UCSF lab results from file: " . $filename);
 
             // Load the Stanford data into the database in table track_covid_result_match
             $this->institution = strpos(strtoupper($filename), "UCSF") !== false ? "UCSF" : "STANFORD";
+            $this->emDebug("This is the institution (should be UCSF: " . $this->institution . ")");
+
             $this->parseCSVtoDB($this->db_results_table, $filename);
+            $this->emDebug("Loaded UCSF data from file $filename");
             $this->processAllProjects();
         }
     }

@@ -59,6 +59,11 @@ if ($pid == $chart_pid) {
     return false;
 }
 
+$allowable_orgs = array("STANFORD","UCSF");
+if (!in_array($org, $allowable_orgs)) {
+    $module->emError("This is not a valid organization $org for project $pid");
+    return false;
+}
 
 /**
  * This section stores the record id, dob and mrn in a table so we can join with appt/lab data in different events
@@ -87,7 +92,7 @@ if (empty($records)) {
     return true;
 }
 
-$module->pushDataIntoDB($db_phi_table, 'record_id,redcap_event_name,mrn,dob', $records);
+$status = $module->pushDataIntoDB($db_phi_table, 'record_id,redcap_event_name,mrn,dob', $records);
 $module->emDebug("Loaded " . count($records) . " demographics records into track_covid_mrn_dob table");
 
 /**
@@ -115,6 +120,7 @@ foreach($configs as $fields => $list) {
     $all_retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $autoloader_fields);
 
     $records = getProjectRecords($all_retrieval_fields, $filter, null, $all_return_fields);
+    //$module->emDebug("These are the project records: " . json_encode($records));
 
     // Load the database with the redcap record_id/event_names
     if (empty($records)) {
@@ -122,7 +128,11 @@ foreach($configs as $fields => $list) {
     } else {
 
         // Push the current project's data into the table
-        $module->pushDataIntoDB($dbtable, $redcap_headers, $records);
+        $status = $module->pushDataIntoDB($dbtable, $redcap_headers, $records);
+        if (!status) {
+            $module->emError("Error when pushing data to table $dbtable for project $pid");
+            return false;
+        }
 
         // Now both database tables are loaded.  Match the redcap records with the results
         $data_to_save = matchRecords($results_table, $pcr_field_list, $ab_field_list);
@@ -197,9 +207,15 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
     // If the fields we are expecting in return are the same fields that we are asking for, set them to the same
     // This won't be the case when checkboxes are involved,  We will return how many options there are for each
     // checkbox.
+    $project_data = true;
     if (is_null($return_fields)) {
         $return_fields = $fields;
+        $project_data = false;
     }
+
+    // These are unwanted fields that might be entered in the pcr_id, igg_id field that we want to strip out
+    $unwanted = array('/', '\\', '"', ',', ' ');
+    $replace_unwanted = array('','','','', '');
 
     /**
       * We are retrieving record_id, mrn and dob into its own table so we can join against each event.
@@ -232,17 +248,41 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
     $data_to_save = array();
     foreach($records as $record) {
         $one_record = array();
-        foreach($return_fields as $field) {
-            if (($field == 'pcr_id') or ($field == 'igg_id')) {
-                $one_record[] = stripslashes($record[$field]);
-                //$one_record[] = str_replace("\\", '', $record[$field]);
+        foreach($return_fields as $field => $value) {
+
+            if ($project_data) {
+                // Field 2 is date sample was collected.  They are in different formats so we need to make sure
+                // they are in the same format so they can load.
+                // Field 4 is pcr_id and field 5 is igg_id.  Some of the values have '/' around the value.  We want to
+                // strip off the '/' if it is there.
+                // Return field order:
+                // 0: "record_id",1: "redcap_event_name",2: "date_of_visit",3:"reservation_participant_location",
+                // 4: "pcr_id",5:"igg_id","lra_pcr_result"," lra_pcr_date"," lra_pcr_match_methods___1","lra_pcr_match_methods___2",
+                //"lra_pcr_match_methods___3","lra_pcr_match_methods___4","lra_pcr_match_methods___5","lra_ab_result",
+                //"lra_ab_date","lra_ab_match_methods___1","lra_ab_match_methods___2","lra_ab_match_methods___3",
+                //"lra_ab_match_methods___4","lra_ab_match_methods___5"
+                if ($field == 2) {
+                    $date_collected = '';
+                    if (!empty($record[$value])) {
+                        $date_collected = date('Y-m-d', strtotime($record[$value]));
+                        $one_record[] = $date_collected;
+                    } else {
+                        $one_record[] = $record[$value];
+                    }
+                } else if (($field == 4) or ($field == 5)) {
+                    $replaced_unwanted_chars = str_replace($unwanted, $replace_unwanted, $record[$value]);
+                    $one_record[] = $replaced_unwanted_chars;
+                } else {
+                    $one_record[] = trim($record[$value]);
+                }
             } else {
-                $one_record[] = $record[$field];
+                $one_record[] = trim($record[$value]);
             }
         }
-        array_push($data_to_save, '("'. implode('","', $one_record) . '")');
+
+        array_push($data_to_save, '("' . implode('","', $one_record) . '")');
+
     }
-    //$module->emDebug("Data to save: " . json_encode($data_to_save));
 
     return $data_to_save;
 }
@@ -266,9 +306,14 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     $sql =
         'select pr.record_id, pr.redcap_event_name, ' .
             ' case rm.ORD_VALUE ' .
-            '       when "Not Detected"    then 0 ' .
-            '       when "Detected"        then 1 ' .
-            '       else                   null ' .
+            '       when "Not Detected"                 then 0 ' .
+            '       when "NOT DETECTED"                 then 0 ' .
+            '       when "COVID 19 RNA: Not detected"   then 0 ' .
+            '       when "NOT DET"                      then 0 ' .
+            '       when "Negative"                     then 0 ' .
+            '       when "Detected"                     then 1 ' .
+            '       when "DETECTED"                     then 1 ' .
+            '       else                                2' .
             ' end as lra_pcr_result, ' .
             ' rm.spec_taken_instant as lra_pcr_date, ' .
             ' 1 as lra_pcr_match_methods___1, ' .
@@ -295,8 +340,10 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
         'select pr.record_id, pr.redcap_event_name, ' .
                 ' case rm.ORD_VALUE ' .
                     ' when "Negative"    then 0 ' .
+                    ' when "NEG"         then 0 ' .
                     ' when "Positive"    then 1 ' .
-                    ' else               null ' .
+                    ' when "POS"         then 1 ' .
+                    ' else               2 ' .
                 ' end as lra_ab_result, ' .
                 ' rm.spec_taken_instant as lra_ab_date,' .
                 ' 1 as lra_ab_match_methods___1, ' .
@@ -323,9 +370,14 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     $sql =
         'select pr.record_id, pr.redcap_event_name, ' .
                 ' case rm.ORD_VALUE ' .
-                    ' when "Not Detected"   then 0 ' .
-                    ' when "Detected"       then 1 ' .
-                    ' else                  null ' .
+                '      when "Not Detected"                 then 0 ' .
+                '      when "NOT DETECTED"                 then 0 ' .
+                '      when "COVID 19 RNA: Not detected"   then 0 ' .
+                '      when "NOT DET"                      then 0 ' .
+                '      when "Negative"                     then 0 ' .
+                '      when "Detected"                     then 1 ' .
+                '      when "DETECTED"                     then 1 ' .
+                '      else                                2' .
                 ' end as lra_pcr_result, ' .
             ' rm.spec_taken_instant as lra_pcr_date, ' .
             ' 1 as lra_pcr_match_methods___1, ' .
@@ -354,9 +406,11 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     $sql =
         ' select pr.record_id, pr.redcap_event_name, ' .
                 ' case rm.ORD_VALUE ' .
-                    ' when "Negative" then 0 ' .
-                    ' when "Positive" then 1 ' .
-                    ' else              null ' .
+                    ' when "Negative"    then 0 ' .
+                    ' when "NEG"         then 0 ' .
+                    ' when "Positive"    then 1 ' .
+                    ' when "POS"         then 1 ' .
+                    ' else               2 ' .
                 ' end as lra_ab_result, ' .
                 ' rm.spec_taken_instant as lra_ab_date, ' .
                 ' 1 as lra_ab_match_methods___1, ' .
@@ -428,7 +482,13 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
         // Now put together the SQL to load this PCR data into a temp table so we can merge into the results table
         // based on record_id and redcap_event_name
         $module->truncateDb($temp_table);
-        $module->pushDataIntoDB($temp_table, $headers_pcr, $all_pcr_results);
+        $status = $module->pushDataIntoDB($temp_table, $headers_pcr, $all_pcr_results);
+        if (!$status) {
+            $module->emError("Could not load data into table $temp_table with headers $headers_pcr");
+            return false;
+        }
+
+        // Now that the data is loaded into the database, query for PCR values.
         $sql =
             'UPDATE track_covid_found_results fr ' .
             ' INNER JOIN ' .
@@ -449,7 +509,13 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
         // Now put together the SQL to merge this IgG data into a temp table so we can merge into the results table
         // based on record_id and redcap_event_name for IGG data
         $module->truncateDb($temp_table);
-        $module->pushDataIntoDB($temp_table, $headers_ab, $all_ab_results);
+        $status = $module->pushDataIntoDB($temp_table, $headers_ab, $all_ab_results);
+        if (!$status) {
+            $module->emError("Could not load data into $temp_table for IgG project data");
+            return false;
+        }
+
+        // Now that the IgG data from the project are loaded, match the values with the loaded data from the csv.
         $sql =
             'UPDATE track_covid_found_results fr ' .
             ' INNER JOIN ' .
@@ -494,12 +560,14 @@ function saveResults($data_to_save) {
 
     $status = true;
     //$module->emDebug("Dave to save: " . json_encode($data_to_save));
-    $return = REDCap::saveData('json', json_encode($data_to_save), 'overwrite');
-    $module->emDebug("This is return from save: " . json_encode($return));
+    $return = REDCap::saveData('json', json_encode($data_to_save));
+    //$module->emDebug("This is return from save: " . json_encode($return));
 
     if(!empty($return["errors"])){
         $module->emError("Error saving lab matches " . $return["errors"]);
         $status = false;
+    } else {
+        $module->emDebug("Successfully saved data with item count: " . $return['item_count']);
     }
     return $status;
 }

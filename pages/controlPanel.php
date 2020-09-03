@@ -14,5 +14,12 @@ namespace Stanford\TrackCovidConsolidator;
     <form method="post">
         <button type="submit" value="submitData" onclick="<?php $module->loadStanfordData(); ?>">Match Stanford lab Results</button>
     </form>
+
+    <!--
+    <form method="post">
+        <button type="submit" value="submitData" onclick="< ?php $module->loadUCSFData(); ? >">Match UCSF lab Results</button>
+    </form>
+    -->
+
 </body>
 </html>
