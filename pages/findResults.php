@@ -19,9 +19,9 @@ if (is_null($pid)) {
 // These are Stanford locations. If the org is STANFORD, then the locations need to be one of these so that
 // the lab results
 $LOCATIONS = array(
-    'CHART'     => array(1,2),
-    'PROTO'     => array(1),
-    'GENPOP'    => array(4,7,8,9,10)
+    'CHART'             => array(1,2),
+    'TRACK PROTO'       => array(1),
+    'TRACK REP'         => array(4,7,8,9,10)
 );
 
 // Since we are doing bulk loading, we need to know where we are loading the data to.
@@ -51,9 +51,9 @@ $genpop_pid = $module->getSystemSetting('genpop-pid');
 if ($pid == $chart_pid) {
     $this_proj = "CHART";
 } else if ($pid == $proto_pid) {
-    $this_proj = "PROTO";
+    $this_proj = "TRACK PROTO";
 } else if ($pid == $genpop_pid) {
-    $this_proj = "GENPOP";
+    $this_proj = "TRACK REP";
 } else {
     $module->emError("This is not a TrackCovid project ($pid).  Please Disable this EM on this project");
     return false;
@@ -94,6 +94,9 @@ if (empty($records)) {
 
 $status = $module->pushDataIntoDB($db_phi_table, 'record_id,redcap_event_name,mrn,dob', $records);
 $module->emDebug("Loaded " . count($records) . " demographics records into track_covid_mrn_dob table");
+
+// Make sure all MRNs are 8 character and lpad with '0' if not
+$status = $module->updateMRNsTo8Char($db_phi_table);
 
 /**
  * Now loop over all configs and look for lab results
@@ -295,7 +298,9 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
  */
 function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
 
-    global $module;
+    global $module, $org, $this_proj;
+
+    $module->emDebug("In matchRecords: org = $org, and project = $this_proj");
 
     $pcr_result_array = array();
     $pcr_result_array_2 = array();
@@ -372,11 +377,12 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                 ' case rm.ORD_VALUE ' .
                 '      when "Not Detected"                 then 0 ' .
                 '      when "NOT DETECTED"                 then 0 ' .
-                '      when "COVID 19 RNA: Not detected"   then 0 ' .
+                '      when "COVID 19 RNA: Not de"         then 0 ' .
                 '      when "NOT DET"                      then 0 ' .
                 '      when "Negative"                     then 0 ' .
                 '      when "Detected"                     then 1 ' .
                 '      when "DETECTED"                     then 1 ' .
+                '      when "TEST NOT PERFORMED"           then 98 '.
                 '      else                                2' .
                 ' end as lra_pcr_result, ' .
             ' rm.spec_taken_instant as lra_pcr_date, ' .
@@ -391,8 +397,12 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
         ' where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT) ' .
         ' and rm.COMPONENT_ABBR = "PCR" ' .
         ' and (rm.birth_date != "0000-00-00" AND rm.birth_date is not null and rm.birth_date != "") ' .
-        ' and mrn.dob != "" ' .
-        ' and (rm.mpi_id is null or rm.mpi_id = "") ';
+        ' and mrn.dob != "" ';
+    if ($org == 'STANFORD') {
+        $sql .= ' and (rm.mpi_id is null or rm.mpi_id = "") ';
+    } else {
+        $sql .= ' and (rm.cohort = "' . $this_proj . '")';
+    }
     $module->emDebug("PCR results on MRN/DOB/Encounter Date query: " . $sql);
 
     $q = db_query($sql);
@@ -426,6 +436,12 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
         ' and (rm.birth_date != "0000-00-00" AND rm.birth_date is not null and rm.birth_date != "") ' .
         ' and mrn.dob != "" ' .
         ' and (rm.mpi_id is null or rm.mpi_id = "")';
+    if ($org == 'STANFORD') {
+        $sql .= ' and (rm.mpi_id is null or rm.mpi_id = "") ';
+    } else {
+        $sql .= ' and (rm.cohort = "' . $this_proj . '")';
+    }
+
     $module->emDebug("MRN/DOB/Contact Date for IgG query: " . $sql);
 
     $q = db_query($sql);
@@ -502,7 +518,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
             ' fr.lra_pcr_match_methods___4 = temp.lra_pcr_match_methods___4, ' .
             ' fr.lra_pcr_match_methods___5 = temp.lra_pcr_match_methods___5 ';
         $q = db_query($sql);
-        //$module->emDebug("This is the result of merging PCR data into track_covid_found_results: " . $q);
+        $module->emDebug("This is the result of merging PCR data into track_covid_found_results: " . $q);
     }
 
     if (!empty($all_ab_results)) {
@@ -533,8 +549,11 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
     }
 
     // Now download the <track_covid_found_results> table and prepare it to load into Redcap
-    $module->truncateDb($temp_table);
-    $sql = 'select ' . $lra_all . ' from track_covid_found_results';
+    //$module->truncateDb($temp_table);
+    //$sql = 'select fr.' . $lra_all . ' from track_covid_found_results fr join track_covid_project_records pr' .
+    $sql = 'select fr.* from track_covid_found_results fr join track_covid_project_records pr' .
+            '          on pr.record_id = fr.record_id and pr.redcap_event_name = fr.redcap_event_name ' .
+            ' where ((pr.lra_ab_result <> fr.lra_ab_result) or (pr.lra_pcr_result <> fr.lra_pcr_result))';
     $q = db_query($sql);
 
     // Create json objects that we can easily load into redcap.
@@ -559,12 +578,10 @@ function saveResults($data_to_save) {
     global $module;
 
     $status = true;
-    //$module->emDebug("Dave to save: " . json_encode($data_to_save));
     $return = REDCap::saveData('json', json_encode($data_to_save));
-    //$module->emDebug("This is return from save: " . json_encode($return));
 
     if(!empty($return["errors"])){
-        $module->emError("Error saving lab matches " . $return["errors"]);
+        $module->emError("Error saving lab matches " . json_encode($return["errors"]));
         $status = false;
     } else {
         $module->emDebug("Successfully saved data with item count: " . $return['item_count']);

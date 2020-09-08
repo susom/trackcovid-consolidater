@@ -13,6 +13,11 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
 	private $institution;
 	private $db_results_table = 'track_covid_result_match';
+	private $db_results_table_headers = array('TRACKCOVID_ID', 'PAT_ID', 'PAT_MRN_ID', 'PAT_NAME', 'BIRTH_DATE',
+                                                'SPEC_TAKEN_INSTANT', 'RESULT_INSTANT', 'COMPONENT_ID', 'COMPONENT_NAME',
+                                                'COMPONENT_ABBR', 'ORD_VALUE', 'TEST_CODE', 'RESULT', 'MPI_ID',
+                                                'COHORT', 'ENTITY');
+	private $db_result_header_order = array();
 
     public function __construct() {
 		parent::__construct();
@@ -33,7 +38,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
 		//HOW MANY POSSIBLE INSITUTIONS?
 		$this->emDebug("Loading data for " . $this->institution . " with file: " . $filename);
-
         $this->truncateDb($db_results_table);
 
         //LOAD CSV TO DB
@@ -44,18 +48,20 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
                 if($header_row){
 
-                    $headers = implode(",",$data);
+                    $headers = $data;
                     $this->emDebug("These are the headers from the data file from " . $this->institution . ": " . json_encode($headers));
                     $header_row = false;
-                }else{
-                    array_push($sql_value_array, '("'. implode('","', $data) . '")');
+                    $this->db_result_header_order = array();
+                } else {
+                    $sql_value_array = $this->organizeColumnsToDBTable($data, $headers, $sql_value_array);
                 }
             }
 
             $this->emDebug("Finished reading file");
 
             // STUFF THIS CSV INTO TEMPORARY RC DB TABLE 'track_covid_result_match'
-            $status = $this->pushDataIntoDB($db_results_table, $headers, $sql_value_array);
+            $header_list = implode(',',$this->db_results_table_headers);
+            $status = $this->pushDataIntoDB($db_results_table, $header_list, $sql_value_array);
 
             fclose($handle);
             $this->emDebug("Closed file $filename");
@@ -66,6 +72,40 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
 		return $status;
 	}
+
+    private function organizeColumnsToDBTable($row, $header, $sql_value_array) {
+
+	    // Loop over the columns we want
+	    if (empty($this->db_result_header_order)) {
+            $this->db_result_header_order = array();
+
+            // Find the column in the file which corresponds to the DB column
+            foreach ($this->db_results_table_headers as $column) {
+                $this->db_result_header_order[$column] = null;
+                for ($ncount = 0; $ncount < count($header); $ncount++) {
+                    if (strtoupper($column) == strtoupper($header[$ncount])) {
+                        $this->db_result_header_order[$column] = $ncount;
+                        break;
+                    }
+                }
+            }
+            $this->emDebug("These are the header column numbers: " . json_encode($this->db_result_header_order));
+        }
+
+        // Loop over this row and retrieve the column data that we need
+        $reordered_row = array();
+        foreach($this->db_result_header_order as $column => $value) {
+            if (is_null($value)) {
+                $reordered_row[] = '';
+            } else {
+                $reordered_row[] = $row[$value];
+            }
+        }
+
+        array_push($sql_value_array, '("'. implode('","', $reordered_row) . '")');
+
+        return $sql_value_array;
+    }
 
     /**
      * Push data into a database table for easier querying. The database tables are either:
@@ -117,6 +157,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      * Wipe the database (before loading new set of CSV data)
      */
     public function truncateDb($table_name) {
+        $this->emDebug("Truncating table: " . $table_name);
+
         $sql = 'TRUNCATE ' . $table_name;
 	    $q = $this->query($sql, []);
         return;
@@ -150,6 +192,10 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             // Load the Stanford data into the database in table track_covid_result_match
             $this->institution = strpos(strtoupper($filename), "UCSF") !== false ? "UCSF" : "STANFORD";
             $this->parseCSVtoDB($this->db_results_table, $filename);
+
+            // Make sure all MRNs are 8 characters
+            $status = $this->updateMRNsTo8Char($this->db_results_table);
+
             $this->processAllProjects();
 
             // TODO: Should the file be deleted from the temp directory?
@@ -223,7 +269,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         $this->emDebug("In loadUCSFData");
 
-        $filename = APP_PATH_TEMP . 'UCSF_08312020.csv';
+        $filename = APP_PATH_TEMP . 'UCSF_09072020.csv';
         if ($filename == null) {
             $this->emError("Could not retrieve UCSF lab results for " . date('Y-m-d'). ' Filename is ' . $filename);
         } else {
@@ -234,9 +280,40 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $this->emDebug("This is the institution (should be UCSF: " . $this->institution . ")");
 
             $this->parseCSVtoDB($this->db_results_table, $filename);
+            $status = $this->updateMRNsTo8Char($this->db_results_table);
             $this->emDebug("Loaded UCSF data from file $filename");
             $this->processAllProjects();
+            $this->emDebug("Finished processing lab results for file $filename");
+
+            // Delete the file
+            $this->discardCSV($filename);
         }
     }
+
+
+    public function updateMRNsTo8Char($db_table) {
+
+        if ($db_table == 'track_covid_result_match') {
+            // Update the MRNs to make sure they are all 8 characters
+            $sql = 'update ' . $db_table . ' set pat_mrn_id = lpad(pat_mrn_id, 8, "0") where length(pat_mrn_id) < 8';
+        } else {
+            // Update the MRNs to make sure they are all 8 characters
+            $sql = 'update ' . $db_table . ' set mrn = lpad(mrn, 8, "0") where length(mrn) < 8';
+        }
+
+        $this->emDebug("DB table is $db_table and update sql is " . $sql);
+        $q = db_query($sql);
+        if ($q) {
+            $this->emDebug("Successfully updated MRNs to 8 characters: " . $q);
+            $status = true;
+        } else {
+            $this->emError("Error while updating MRNs to 8 characters: " . $q);
+            $status = false;
+        }
+
+        return $status;
+
+    }
+
 
 }
