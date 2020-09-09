@@ -53,20 +53,26 @@
 			"type": "checkbox"
 		},
         {
-            "key": "birth-date",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Birth date</span></h6>Field which stores the birthdate",
+            "key": "stanford-birth-date",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Stanford Birth date field</span></h6>Field which stores the Stanford birthdate",
             "required": true,
             "type": "field-list"
         },
         {
             "key": "stanford-mrn",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Stanford MRN</span></h6>Field which stores the Stanford mrn",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Stanford MRN field</span></h6>Field which stores the Stanford mrn",
+            "required": true,
+            "type": "field-list"
+        },
+        {
+            "key": "ucsf-birth-date",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>UCSF Birth date field</span></h6>Field which stores the UCSF birthdate",
             "required": true,
             "type": "field-list"
         },
         {
             "key": "ucsf-mrn",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>UCSF MRN</span></h6>Field which stores the UCSF mrn",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>UCSF MRN field</span></h6>Field which stores the UCSF mrn",
             "required": true,
             "type": "field-list"
         },

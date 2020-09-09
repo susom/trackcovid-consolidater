@@ -70,11 +70,13 @@ if (!in_array($org, $allowable_orgs)) {
  */
 if ($org == 'STANFORD') {
     $mrn_field = $module->getProjectSetting('stanford-mrn');
+    $birthdate_field = $module->getProjectSetting('stanford-birth-date');
 } else {
     $mrn_field = $module->getProjectSetting('ucsf-mrn');
+    $birthdate_field = $module->getProjectSetting('ucsf-birth-date');
 }
-$birthdate_field = $module->getProjectSetting('birth-date');
 $baseline_event = $module->getProjectSetting('baseline-event');
+$module->emDebug("This is the MRN field $mrn_field and this is the birth date field $birthdate_field");
 
 // Clear out all the database tables before we begin so we have consistent data
 $module->truncateDb($db_phi_table);
