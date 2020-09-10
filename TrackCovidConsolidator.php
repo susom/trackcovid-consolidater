@@ -131,7 +131,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             } else {
                 $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $data_array);
             }
-            $this->emDebug("This is the sql: " . $sql);
+            //$this->emDebug("This is the sql: " . $sql);
 
             $q = $this->query($sql, array());
             $this->emDebug("Finished inserting into database ($db_table) with status $q");
@@ -269,7 +269,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         $this->emDebug("In loadUCSFData");
 
-        $filename = APP_PATH_TEMP . 'UCSF_09072020.csv';
+        $filename = APP_PATH_TEMP . 'UCSF_data.csv';
         if ($filename == null) {
             $this->emError("Could not retrieve UCSF lab results for " . date('Y-m-d'). ' Filename is ' . $filename);
         } else {
