@@ -131,7 +131,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             } else {
                 $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $data_array);
             }
-            //$this->emDebug("This is the sql: " . $sql);
+            $this->emDebug("This is the sql: " . $sql);
 
             $q = $this->query($sql, array());
             $this->emDebug("Finished inserting into database ($db_table) with status $q");
