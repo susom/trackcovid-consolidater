@@ -28,23 +28,25 @@
 	"permissions": [
 	],
 
-	"framework-version": 4,
-
 	"links": {
 		"project": [
 			{
-				"name": "Process Data for all Projects",
-				"icon": "gear",
-				"url": "pages/controlPanel.php"
+				"name": "TrackCovid: Load UCSF Lab Data",
+                "icon": "gear",
+                "url": "pages/MatchUCSFLabData.php"
 			}
 		],
 		"control-center": [
-
+            {
+                "name": "TrackCovid: Load Stanford Lab Data",
+                "icon": "gear",
+                "url": "pages/MatchStanfordLabData.php"
+            }
 		]
 	},
 	"no-auth-pages": [
         "pages/findResults"
-	],
+    ],
 	"project-settings": [
 		{
 			"key": "enable-project-debug-logging",
@@ -131,7 +133,16 @@
     ],
 
 	"crons": [
-	],
+        {
+            "cron_name": "load_stanford_data",
+            "cron_description": "This cron will run once a week on Sundays at 7pm to pull data from STARR and load into TrackCovid projects.",
+            "method": "loadStanfordData",
+            "cron_weekday": 0,
+            "cron_hour":    19,
+            "cron_minute":  0
+        }
+
+    ],
 
 	"compatibility": {
 		"php-version-min": "",

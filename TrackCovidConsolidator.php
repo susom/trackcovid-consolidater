@@ -171,7 +171,9 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      * (Proto has different locations where they keep lab data) and then move to the UCSF data.
      */
     public function loadStanfordData() {
+
 	    $this->emDebug("Process CSV DATA for this project");
+	    $status = false;
 
 	    // We need to check the IRB and privacy report before retrieving data.  All the projects
         // are under the same IRB so it doesn't matter which project IRB number we are checking, just
@@ -181,7 +183,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
         // to the temporary directory in REDCap.
         // **** Switch this when not debugging ****//
-        //$filename = APP_PATH_TEMP . 'Stanford_08302020.csv';
+        //$filename = APP_PATH_TEMP . 'Stanford_09142020.csv';
         $filename = $this->getStanfordTrackCovidResults($irb_pid);
 
         if ($filename == false) {
@@ -196,12 +198,13 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             // Make sure all MRNs are 8 characters
             $status = $this->updateMRNsTo8Char($this->db_results_table);
 
-            $this->processAllProjects();
+            $status = $this->processAllProjects();
 
             // TODO: Should the file be deleted from the temp directory?
             $this->discardCSV($filename);
-
         }
+
+        return $status;
 	}
 
     /**
@@ -210,6 +213,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
     public function processAllProjects() {
 
+        $status = false;
         //get all projects that are enabled for this module
         $enabled = ExternalModules::getEnabledProjects($this->PREFIX);
         $this->emDebug("Enabled Projects: " . json_encode($enabled));
@@ -225,13 +229,14 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $this->emDebug("Calling cron ProcessCron for project $pid at URL " . $this_url);
 
             // Go into project context and process data for this project
-            $resp = http_get($this_url);
-            if ($resp == false) {
+            $status = http_get($this_url);
+            if ($status == false) {
                 $this->emError("Processing for project $pid failed");
             } else {
                 $this->emDebug("Processing for project $pid was successful");
             }
         }
+        return $status;
     }
 
     /**
@@ -268,6 +273,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
     public function loadUCSFData() {
 
         $this->emDebug("In loadUCSFData");
+        $status = false;
 
         $filename = APP_PATH_TEMP . 'UCSF_data.csv';
         if ($filename == null) {
@@ -282,12 +288,14 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $this->parseCSVtoDB($this->db_results_table, $filename);
             $status = $this->updateMRNsTo8Char($this->db_results_table);
             $this->emDebug("Loaded UCSF data from file $filename");
-            $this->processAllProjects();
+            $status = $this->processAllProjects();
             $this->emDebug("Finished processing lab results for file $filename");
 
             // Delete the file
             $this->discardCSV($filename);
         }
+
+        return $status;
     }
 
 
