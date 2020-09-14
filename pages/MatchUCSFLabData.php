@@ -91,23 +91,15 @@ if ($action == "load" and $org == 'ucsf') {
     $(function () {
         $("#upload").bind("click", function () {
 
-            // Set progress ball cursor
-            $("body").css("cursor", "progress");
-
-            var regex = /^([a-zA-Z0-9\s_\\.\-:])+(.csv|.txt)$/;
-            if (regex.test($("#fileUpload").val().toLowerCase())) {
-                if (typeof (FileReader) != "undefined") {
-                    var reader = new FileReader();
-                    reader.onload = function (e) {
-                        var content = e.target.result;
-                        TrackCovid.loadConfig('ucsf', content);
-                    }
-                    reader.readAsText($("#fileUpload")[0].files[0]);
-                } else {
-                    alert("This browser does not support HTML5.");
+            if (typeof (FileReader) != "undefined") {
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    var content = e.target.result;
+                    TrackCovid.loadConfig('ucsf', content);
                 }
+                reader.readAsText($("#fileUpload")[0].files[0]);
             } else {
-                alert("Please upload a valid CSV file.");
+                alert("This browser does not support HTML5.");
             }
         });
     });
@@ -117,6 +109,9 @@ if ($action == "load" and $org == 'ucsf') {
     // Make the API call back to the server to load the new config\
     TrackCovid.loadConfig = function(org, content) {
 
+        // Set progress ball cursor
+        $("body").css("cursor", "progress");
+
         $.ajax({
             type: "POST",
             data: {
@@ -125,7 +120,10 @@ if ($action == "load" and $org == 'ucsf') {
                 "content"       : content
             },
             success:function(status) {
+                // Return the cursor to the default
                 $("body").css("cursor", "default");
+
+                // Show the status of load
                 if (status === "1") {
                     $("#status").text("Successfully loaded " + org.toUpperCase() + " data").css({"color": "red"});
                 } else {

@@ -64,10 +64,6 @@ if ($action == 'load' and $org == 'stanford') {
 
     $(function () {
         $("#submit").bind("click", function () {
-
-            // Add a busy cursor
-            $("body").css("cursor", "progress");
-
             var org = 'stanford';
             TrackCovid.loadConfig(org);
         });
@@ -79,6 +75,9 @@ if ($action == 'load' and $org == 'stanford') {
     // Make the API call back to the server to load the new config\
     TrackCovid.loadConfig = function(org) {
 
+        // Add a busy cursor
+        $("body").css("cursor", "progress");
+
         $.ajax({
                 type: "POST",
                 data: {
@@ -86,7 +85,10 @@ if ($action == 'load' and $org == 'stanford') {
                     "action"        : "load"
                 },
                 success:function(status) {
+                    // Return the cursor back to normal
                     $("body").css("cursor", "default");
+
+                    // Display results of load
                     if (status === "1") {
                         $("#status").text("Successfully loaded " + org.toUpperCase() + " data").css({"color": "red"});
                     } else {
