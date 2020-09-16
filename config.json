@@ -129,6 +129,12 @@
             "name": "<b>PID of Gen Pop Project</b><br>Select the Gen Pop Project",
             "required": true,
             "type": "project-id"
+        },
+        {
+            "key": "allowed-users-for-loader",
+            "name": "<b>Users allowed to run loader</b><br>Comma-separated list of sunet IDs who are allowed to run the UCSF loader.",
+            "required": true,
+            "type": "text"
         }
     ],
 

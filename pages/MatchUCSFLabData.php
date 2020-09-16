@@ -6,6 +6,22 @@ $action = isset($_POST['action']) && !empty($_POST['action']) ? $_POST['action']
 $org = isset($_POST['org']) && !empty($_POST['org']) ? $_POST['org'] : null;
 $content = isset($_POST['content']) && !empty($_POST['content']) ? $_POST['content'] : null;
 
+$module->emDebug("User " . USERID . " is running the UCSF loader");
+
+// First check to see if this person has permission to run the loader
+$list_of_users = $module->getSystemSetting('allowed-users-for-loader');
+$list_of_users = strtolower(str_replace(' ', '', $list_of_users));
+$module->emDebug("List of allowed users: " . $list_of_users);
+
+$allowed_users = explode(',',$list_of_users);
+if (!in_array(USERID, $allowed_users)) {
+    $msg = "User " . USERID . " is not approved to run the loader - exiting...";
+    $module->emError($msg);
+    print $msg;
+    return;
+}
+
+
 if ($action == "load" and $org == 'ucsf') {
 
     // Create a temporary file in the /tmp directory
