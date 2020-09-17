@@ -7,6 +7,7 @@ use REDCap;
 $pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
 $org = isset($_GET['org']) && !empty($_GET['org']) ? $_GET['org'] : null;
 
+
 // If we don't receive a project to process or an organization, we can't continue.
 if (is_null($pid)) {
     $module->emError("A project ID must be included to run this script");
@@ -151,6 +152,7 @@ foreach($configs as $fields => $list) {
         }
 
         // TODO: Check for changes so we can report out
+        //$status = reportChanges();
 
     }
 }
@@ -401,7 +403,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
         ' and (rm.birth_date != "0000-00-00" AND rm.birth_date is not null and rm.birth_date != "") ' .
         ' and mrn.dob != "" ';
     if ($org == 'STANFORD') {
-        $sql .= ' and (rm.mpi_id is null or rm.mpi_id = "") ';
+        $sql .= ' and (pr.pcr_id is null or pr.pcr_id = "") ';
     } else {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
@@ -436,10 +438,9 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
         ' where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT) ' .
         ' and rm.COMPONENT_ABBR = "IGG" ' .
         ' and (rm.birth_date != "0000-00-00" AND rm.birth_date is not null and rm.birth_date != "") ' .
-        ' and mrn.dob != "" ' .
-        ' and (rm.mpi_id is null or rm.mpi_id = "")';
+        ' and mrn.dob != "" ';
     if ($org == 'STANFORD') {
-        $sql .= ' and (rm.mpi_id is null or rm.mpi_id = "") ';
+        $sql .= ' and (pr.igg_id is null or pr.igg_id = "") ';
     } else {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
@@ -591,18 +592,17 @@ function saveResults($data_to_save) {
     return $status;
 }
 
-
 /**
- * Dump out Unmatched to file
+ * We are going to report items that each project is interested in. So far, these are the checks:
+ *      1) Indicate labs that were taken > 7 days that don't have results
+ *      2) How many records can be matched if the MRN was present based on DoB/Date Collected only
+ *      3) How many records can be matched if the MRN was present based on sample_id only
+ *      4) How many total cumulative positives (AB and PCR) and how many incremental positives are there?
  */
-function processUnmatched() {
+function reportChanges() {
     global $module;
 
-    $module->emDebug("Once all data is processed, any left over unmatched in any project should be dumped out to file");
+    $status = false;
 
-    $unmatched_data = array();
-    foreach( $module->CSVRecords as $csvrecord ){
-
-    }
-    return;
+    return $status;
 }
