@@ -98,7 +98,16 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             if (is_null($value)) {
                 $reordered_row[] = '';
             } else {
-                $reordered_row[] = $row[$value];
+                if ($column == 'BIRTH_DATE') {
+                    $found_value = date("Y-m-d", strtotime($row[$value]));
+                } else if (($column == 'SPEC_TAKEN_INSTANT') or ($column == 'RESULT_INSTANT')) {
+                    $found_value = date("Y-m-d H:i:s", strtotime($row[$value]));
+                } else {
+                    $found_value = $row[$value];
+                }
+                $reordered_row[] = $found_value;
+                //$this->emDebug("Column $column, value $value, row data $row[$value], converted value $found_value");
+
             }
         }
 

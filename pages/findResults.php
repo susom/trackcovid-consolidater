@@ -363,7 +363,8 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
             ' from track_covid_result_match rm join track_covid_mrn_dob mrn ' .
                     ' on rm.pat_mrn_id = mrn.mrn ' .
                 ' join track_covid_project_records pr ' .
-                    ' on mrn.record_id = pr.record_id and substr(rm.mpi_id, 1,8) = pr.igg_id ' .
+                    ' on mrn.record_id = pr.record_id ' .
+    ' and ((rm.mpi_id like "E%" and rm.mpi_id = pr.igg_id) or (substr(rm.mpi_id, 1,8) = pr.igg_id)) ' .
         ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
         ' and rm.COMPONENT_ABBR = "IGG"';
     $module->emDebug("IGG MRN/MPI_ID query : " . $sql);
@@ -556,7 +557,8 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
     //$sql = 'select fr.' . $lra_all . ' from track_covid_found_results fr join track_covid_project_records pr' .
     $sql = 'select fr.* from track_covid_found_results fr join track_covid_project_records pr' .
             '          on pr.record_id = fr.record_id and pr.redcap_event_name = fr.redcap_event_name ' .
-            ' where ((pr.lra_ab_result <> fr.lra_ab_result) or (pr.lra_pcr_result <> fr.lra_pcr_result))';
+            ' where ((pr.lra_ab_result <> fr.lra_ab_result) or (pr.lra_pcr_result <> fr.lra_pcr_result)' .
+            '       or (pr.lra_ab_date <> fr.lra_ab_date) or (pr.lra_pcr_date <> fr.lra_pcr_date))';
     $q = db_query($sql);
 
     // Create json objects that we can easily load into redcap.
