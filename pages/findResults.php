@@ -32,14 +32,14 @@ $results_table = 'track_covid_found_results';
 
 const LOCATION_COLLECTED = 1;
 $collection_headers = 'record_id,redcap_event_name,date_collected,location,pcr_id,igg_id';
-$pcr_field_list = 'lra_pcr_result, lra_pcr_date, lra_pcr_match_methods___1,lra_pcr_match_methods___2,' .
+$pcr_field_list = 'lra_pcr_result, lra_pcr_date, lra_pcr_assay_method, lra_pcr_match_methods___1,lra_pcr_match_methods___2,' .
                     'lra_pcr_match_methods___3,lra_pcr_match_methods___4,lra_pcr_match_methods___5';
-$ab_field_list = 'lra_ab_result,lra_ab_date,lra_ab_match_methods___1,lra_ab_match_methods___2,' .
+$ab_field_list = 'lra_ab_result,lra_ab_date, lra_ab_assay_method, lra_ab_match_methods___1,lra_ab_match_methods___2,' .
                     'lra_ab_match_methods___3,lra_ab_match_methods___4,lra_ab_match_methods___5';
 $autoload_field_list = $pcr_field_list . ',' . $ab_field_list;
 $redcap_headers = $collection_headers . ',' . $autoload_field_list;
-$autoloader_fields = array('lra_pcr_result', 'lra_pcr_date', 'lra_pcr_match_methods',
-                            'lra_ab_result', 'lra_ab_date', 'lra_ab_match_methods');
+$autoloader_fields = array('lra_pcr_result', 'lra_pcr_date', 'lra_pcr_assay_method', 'lra_pcr_match_methods',
+                            'lra_ab_result', 'lra_ab_date', 'lra_ab_assay_method', 'lra_ab_match_methods');
 
 
 // We will filter samples based on the location they were taken.  If we are processing Stanford
@@ -126,7 +126,6 @@ foreach($configs as $fields => $list) {
     $all_retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $autoloader_fields);
 
     $records = getProjectRecords($all_retrieval_fields, $filter, null, $all_return_fields);
-    //$module->emDebug("These are the project records: " . json_encode($records));
 
     // Load the database with the redcap record_id/event_names
     if (empty($records)) {
@@ -228,8 +227,8 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
       * We are retrieving record_id, mrn and dob into its own table so we can join against each event.
       * The field order is:  0) date_of_visit, 1) location_collected, 2) pcr_id, 3) igg_id
       * And the loader fields are the same for each project:
-      *                      0) lra_pcr_result, 1) lra_pcr_date, 2) lra_pcr_match_methods,
-      *                      3) lra_ab_result, 4) lra_ab_date, 5) lra_ab_match_methods
+      *                      0) lra_pcr_result, 1) lra_pcr_date, 2) lra_pcr_assay_method, 3) lra_pcr_match_methods,
+      *                      4) lra_ab_result,  5) lra_ab_date,  6) lra_ab_assay_method,  7) lra_ab_match_methods
       * When the match fields come back, there will be 5 options because they are checkboxes:
       *                      1) lra_pcr_match_methods___1/lra_ab_match_methods___1 = MRN
       *                      2) lra_pcr_match_methods___2/lra_ab_match_methods___2 = Sample ID
@@ -258,16 +257,19 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
         foreach($return_fields as $field => $value) {
 
             if ($project_data) {
-                // Field 2 is date sample was collected.  They are in different formats so we need to make sure
+                // Field 2 is the date the sample was collected.  They are in different formats so we need to make sure
                 // they are in the same format so they can load.
                 // Field 4 is pcr_id and field 5 is igg_id.  Some of the values have '/' around the value.  We want to
                 // strip off the '/' if it is there.
                 // Return field order:
-                // 0: "record_id",1: "redcap_event_name",2: "date_of_visit",3:"reservation_participant_location",
-                // 4: "pcr_id",5:"igg_id","lra_pcr_result"," lra_pcr_date"," lra_pcr_match_methods___1","lra_pcr_match_methods___2",
-                //"lra_pcr_match_methods___3","lra_pcr_match_methods___4","lra_pcr_match_methods___5","lra_ab_result",
-                //"lra_ab_date","lra_ab_match_methods___1","lra_ab_match_methods___2","lra_ab_match_methods___3",
-                //"lra_ab_match_methods___4","lra_ab_match_methods___5"
+                // 0:"record_id", 1:"redcap_event_name", 2:"date_of_visit", 3:"reservation_participant_location",
+                // 4:"pcr_id", 5:"igg_id", "lra_pcr_result", "lra_pcr_date", "lra_pcr_assay_method",
+                // "lra_pcr_match_methods___1", "lra_pcr_match_methods___2",
+                // "lra_pcr_match_methods___3", "lra_pcr_match_methods___4", "lra_pcr_match_methods___5",
+                // "lra_ab_result", "lra_ab_date", "lra_ab_assay_method",
+                // "lra_ab_match_methods___1",  "lra_ab_match_methods___2", "lra_ab_match_methods___3",
+                // "lra_ab_match_methods___4", "lra_ab_match_methods___5"
+
                 if ($field == 2) {
                     $date_collected = '';
                     if (!empty($record[$value])) {
@@ -288,7 +290,6 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
         }
 
         array_push($data_to_save, '("' . implode('","', $one_record) . '")');
-
     }
 
     return $data_to_save;
@@ -325,6 +326,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
             '       else                                2' .
             ' end as lra_pcr_result, ' .
             ' rm.spec_taken_instant as lra_pcr_date, ' .
+            ' rm.method_desc as lra_pcr_assay_method, ' .
             ' 1 as lra_pcr_match_methods___1, ' .
             ' 1 as lra_pcr_match_methods___2, ' .
             ' 0 as lra_pcr_match_methods___3, ' .
@@ -355,6 +357,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                     ' else               2 ' .
                 ' end as lra_ab_result, ' .
                 ' rm.spec_taken_instant as lra_ab_date,' .
+                ' rm.method_desc as lra_ab_assay_method, ' .
                 ' 1 as lra_ab_match_methods___1, ' .
                 ' 1 as lra_ab_match_methods___2, ' .
                 ' 0 as lra_ab_match_methods___3, ' .
@@ -391,6 +394,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                 '      else                                2' .
                 ' end as lra_pcr_result, ' .
             ' rm.spec_taken_instant as lra_pcr_date, ' .
+            ' rm.method_desc as lra_ab_assay_method, ' .
             ' 1 as lra_pcr_match_methods___1, ' .
             ' 0 as lra_pcr_match_methods___2, ' .
             ' 1 as lra_pcr_match_methods___3, ' .
@@ -428,6 +432,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                     ' else               2 ' .
                 ' end as lra_ab_result, ' .
                 ' rm.spec_taken_instant as lra_ab_date, ' .
+                ' rm.method_desc as lra_ab_assay_method, ' .
                 ' 1 as lra_ab_match_methods___1, ' .
                 ' 0 as lra_ab_match_methods___2, ' .
                 ' 1 as lra_ab_match_methods___3, ' .
@@ -516,6 +521,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
             ' SET ' .
             ' fr.lra_pcr_date = temp.lra_pcr_date, ' .
             ' fr.lra_pcr_result = temp.lra_pcr_result, ' .
+            ' fr.lra_pcr_assay_method = temp.lra_pcr_assay_method, ' .
             ' fr.lra_pcr_match_methods___1 = temp.lra_pcr_match_methods___1, ' .
             ' fr.lra_pcr_match_methods___2 = temp.lra_pcr_match_methods___2, ' .
             ' fr.lra_pcr_match_methods___3 = temp.lra_pcr_match_methods___3, ' .
@@ -524,6 +530,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
         $q = db_query($sql);
         $module->emDebug("This is the result of merging PCR data into track_covid_found_results: " . $q);
     }
+
 
     if (!empty($all_ab_results)) {
         // Now put together the SQL to merge this IgG data into a temp table so we can merge into the results table
@@ -543,6 +550,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
             ' SET ' .
             ' fr.lra_ab_date = temp.lra_ab_date, ' .
             ' fr.lra_ab_result = temp.lra_ab_result, ' .
+            ' fr.lra_ab_assay_method = temp.lra_ab_assay_method, ' .
             ' fr.lra_ab_match_methods___1 = temp.lra_ab_match_methods___1, ' .
             ' fr.lra_ab_match_methods___2 = temp.lra_ab_match_methods___2, ' .
             ' fr.lra_ab_match_methods___3 = temp.lra_ab_match_methods___3, ' .
@@ -558,7 +566,8 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
     $sql = 'select fr.* from track_covid_found_results fr join track_covid_project_records pr' .
             '          on pr.record_id = fr.record_id and pr.redcap_event_name = fr.redcap_event_name ' .
             ' where ((pr.lra_ab_result <> fr.lra_ab_result) or (pr.lra_pcr_result <> fr.lra_pcr_result)' .
-            '       or (pr.lra_ab_date <> fr.lra_ab_date) or (pr.lra_pcr_date <> fr.lra_pcr_date))';
+            '       or (pr.lra_ab_date <> fr.lra_ab_date) or (pr.lra_pcr_date <> fr.lra_pcr_date) ' .
+            '       or (pr.lra_ab_assay_method <> fr.lra_ab_assay_method) or (pr.lra_pcr_assay_method <> fr.lra_pcr_assay_method))';
     $q = db_query($sql);
 
     // Create json objects that we can easily load into redcap.

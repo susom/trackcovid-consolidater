@@ -16,7 +16,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	private $db_results_table_headers = array('TRACKCOVID_ID', 'PAT_ID', 'PAT_MRN_ID', 'PAT_NAME', 'BIRTH_DATE',
                                                 'SPEC_TAKEN_INSTANT', 'RESULT_INSTANT', 'COMPONENT_ID', 'COMPONENT_NAME',
                                                 'COMPONENT_ABBR', 'ORD_VALUE', 'TEST_CODE', 'RESULT', 'MPI_ID',
-                                                'COHORT', 'ENTITY');
+                                                'COHORT', 'ENTITY', 'METHOD_DESC');
 	private $db_result_header_order = array();
 
     public function __construct() {
@@ -192,7 +192,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
         // to the temporary directory in REDCap.
         // **** Switch this when not debugging ****//
-        //$filename = APP_PATH_TEMP . 'Stanford_09142020.csv';
+        //$filename = APP_PATH_TEMP . 'Stanford_10012020.csv';
         $filename = $this->getStanfordTrackCovidResults($irb_pid);
 
         if ($filename == false) {
