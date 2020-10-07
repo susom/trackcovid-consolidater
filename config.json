@@ -135,6 +135,12 @@
             "name": "<b>Users allowed to run loader</b><br>Comma-separated list of sunet IDs who are allowed to run the UCSF loader.",
             "required": true,
             "type": "text"
+        },
+        {
+            "key": "unmatched",
+            "name": "<b>Unmatched Lab Project</b><br>Project which will store the unmatched lab results",
+            "required": true,
+            "type": "project-id"
         }
     ],
 
