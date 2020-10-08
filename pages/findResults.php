@@ -32,9 +32,9 @@ $results_table = 'track_covid_found_results';
 
 const LOCATION_COLLECTED = 1;
 $collection_headers = 'record_id,redcap_event_name,date_collected,location,pcr_id,igg_id';
-$pcr_field_list = 'lra_pcr_result, lra_pcr_date, lra_pcr_assay_method, lra_pcr_match_methods___1,lra_pcr_match_methods___2,' .
+$pcr_field_list = 'lra_pcr_result,lra_pcr_date,lra_pcr_assay_method,lra_pcr_match_methods___1,lra_pcr_match_methods___2,' .
                     'lra_pcr_match_methods___3,lra_pcr_match_methods___4,lra_pcr_match_methods___5';
-$ab_field_list = 'lra_ab_result,lra_ab_date, lra_ab_assay_method, lra_ab_match_methods___1,lra_ab_match_methods___2,' .
+$ab_field_list = 'lra_ab_result,lra_ab_date,lra_ab_assay_method,lra_ab_match_methods___1,lra_ab_match_methods___2,' .
                     'lra_ab_match_methods___3,lra_ab_match_methods___4,lra_ab_match_methods___5';
 $autoload_field_list = $pcr_field_list . ',' . $ab_field_list;
 $redcap_headers = $collection_headers . ',' . $autoload_field_list;
@@ -135,7 +135,6 @@ foreach($configs as $fields => $list) {
         $module->emDebug("There are no records that need processing for this config: " . $list['fields']);
     } else {
 
-        /*
         // Push the current project's data into the table
         $status = $module->pushDataIntoDB($dbtable, $redcap_headers, $records);
         if (!status) {
@@ -153,13 +152,14 @@ foreach($configs as $fields => $list) {
         } else {
             $module->emError("Error with updates for project $pid, for config " . $list['fields']);
         }
-        */
-
-        // TODO: Check for changes so we can report out
-        $status = reportChanges($this_proj, $dag_name);
-
     }
 }
+
+$return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
+$retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
+
+// Figure out which results were not used in matching records and store them in a new project
+$status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields, $return_fields, $autoload_field_list);
 
 print $status;
 
@@ -277,16 +277,13 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
                 // "lra_ab_match_methods___4", "lra_ab_match_methods___5"
 
                 if ($field == 2) {
-                    $date_collected = '';
                     if (!empty($record[$value])) {
-                        $date_collected = date('Y-m-d', strtotime($record[$value]));
-                        $one_record[] = $date_collected;
+                        $one_record[] = date('Y-m-d', strtotime($record[$value]));
                     } else {
                         $one_record[] = $record[$value];
                     }
                 } else if (($field == 4) or ($field == 5)) {
-                    $replaced_unwanted_chars = str_replace($unwanted, $replace_unwanted, $record[$value]);
-                    $one_record[] = $replaced_unwanted_chars;
+                    $one_record[] = str_replace($unwanted, $replace_unwanted, $record[$value]);
                 } else {
                     $one_record[] = trim($record[$value]);
                 }
@@ -491,7 +488,6 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
 
     global $module;
 
-
     $temp_table = 'track_covid_temp';
     $rc_events = 'record_id,redcap_event_name';
     $headers_pcr = $rc_events . ',' . $pcr_field_list;
@@ -583,7 +579,6 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
     while ($results = db_fetch_assoc($q)) {
         $final_results[] = array_combine($lra_headers, $results);
     }
-    //$module->emDebug("These are the final results to update: " . json_encode($final_results));
 
     return $final_results;
 }
@@ -617,9 +612,57 @@ function saveResults($data_to_save) {
  *      3) How many records can be matched if the MRN was present based on sample_id only
  *      4) How many total cumulative positives (AB and PCR) and how many incremental positives are there?
  */
-function reportChanges($project, $dag_name) {
+function reportChanges($project, $dag_name, $results_table, $retrieval_fields, $return_fields, $autoload_field_list) {
 
     global $module;
+    $status = true;
+
+    // Retrieve the final list of autoloaded results so we can compare against the results in the file
+    // and see which results are leftover results
+    $module->truncateDb($results_table);
+    $filter = "[lra_pcr_result] <> '' or [lra_ab_result] <> ''";
+    $params = array(
+        'return_format' => 'json',
+        'fields'        => $retrieval_fields,
+        'filterLogic'   => $filter
+    );
+
+    $q = REDCap::getData($params);
+    $records = json_decode($q, true);
+
+    $data_to_save = array();
+    foreach($records as $record) {
+        $one_record = array();
+        $one_record[] = $record['record_id'];
+        $one_record[] = $record['redcap_event_name'];
+        $one_record[] = $record['lra_pcr_result'];
+        $one_record[] = $record['lra_pcr_date'];
+        $one_record[] = $record['lra_pcr_assay_method'];
+        $one_record[] = $record['lra_pcr_match_methods___1'];
+        $one_record[] = $record['lra_pcr_match_methods___2'];
+        $one_record[] = $record['lra_pcr_match_methods___3'];
+        $one_record[] = $record['lra_pcr_match_methods___4'];
+        $one_record[] = $record['lra_pcr_match_methods___5'];
+        $one_record[] = $record['lra_ab_result'];
+        $one_record[] = $record['lra_ab_date'];
+        $one_record[] = $record['lra_ab_assay_method'];
+        $one_record[] = $record['lra_ab_match_methods___1'];
+        $one_record[] = $record['lra_ab_match_methods___2'];
+        $one_record[] = $record['lra_ab_match_methods___3'];
+        $one_record[] = $record['lra_ab_match_methods___4'];
+        $one_record[] = $record['lra_ab_match_methods___5'];
+        array_push($data_to_save, '("' . implode('","', $one_record) . '")');
+    }
+    $module->emDebug("retrieved lra data: " . json_encode($data_to_save));
+
+
+    // Push the current project's data into the results table
+    $headers = "record_id,redcap_event_name," . $autoload_field_list;
+    $status = $module->pushDataIntoDB($results_table, $headers, $data_to_save);
+    if (!status) {
+        $module->emError("Error when pushing data to table $results_table for project $project");
+        return false;
+    }
 
     $status = unmatchedLabResults($project, $dag_name);
 
@@ -629,6 +672,7 @@ function reportChanges($project, $dag_name) {
 function unmatchedLabResults($project, $dag_name) {
 
     global $module, $pid;
+
     $unmatched_table = "track_covid_unmatched";
     $unmatched_headers = array("pat_mrn_id", "pat_name", "birth_date", "spec_taken_instant",
                                 "component_abbr", "ord_value", "mpi_id", "cohort");
@@ -666,7 +710,7 @@ function unmatchedLabResults($project, $dag_name) {
             " and rm.COMPONENT_ABBR = 'PCR' " .
             " and rm.SPEC_TAKEN_INSTANT not in " .
             "       (select lra_pcr_date " .
-            "           from track_covid_project_records proj join track_covid_mrn_dob mrn " .
+            "           from track_covid_found_results proj join track_covid_mrn_dob mrn " .
             "           where proj.record_id = mrn.record_id " .
             "           and mrn.mrn = rm.pat_mrn_id " .
             "           and proj.lra_pcr_date is not null) " .
@@ -700,7 +744,7 @@ function unmatchedLabResults($project, $dag_name) {
         " and rm.COMPONENT_ABBR = 'IGG' " .
         " and rm.SPEC_TAKEN_INSTANT not in " .
         "       (select lra_ab_date " .
-        "           from track_covid_project_records proj join track_covid_mrn_dob mrn " .
+        "           from track_covid_found_results proj join track_covid_mrn_dob mrn " .
         "           where proj.record_id = mrn.record_id " .
         "           and mrn.mrn = rm.pat_mrn_id " .
         "           and proj.lra_ab_date is not null) " .
