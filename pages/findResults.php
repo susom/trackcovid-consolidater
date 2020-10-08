@@ -159,7 +159,8 @@ $return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_re
 $retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
 
 // Figure out which results were not used in matching records and store them in a new project
-$status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields, $return_fields, $autoload_field_list);
+$status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
+                        $return_fields, $autoload_field_list, $org);
 
 print $status;
 
@@ -612,7 +613,8 @@ function saveResults($data_to_save) {
  *      3) How many records can be matched if the MRN was present based on sample_id only
  *      4) How many total cumulative positives (AB and PCR) and how many incremental positives are there?
  */
-function reportChanges($project, $dag_name, $results_table, $retrieval_fields, $return_fields, $autoload_field_list) {
+function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
+                       $return_fields, $autoload_field_list, $org) {
 
     global $module;
     $status = true;
@@ -664,12 +666,12 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields, $
         return false;
     }
 
-    $status = unmatchedLabResults($project, $dag_name);
+    $status = unmatchedLabResults($project, $dag_name, $org);
 
     return $status;
 }
 
-function unmatchedLabResults($project, $dag_name) {
+function unmatchedLabResults($project, $dag_name, $org) {
 
     global $module, $pid;
 
@@ -754,7 +756,7 @@ function unmatchedLabResults($project, $dag_name) {
     $error_msg = "Error loading results from IGG query with matched MRNs and unmatched dates for project " . $project;
     $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
 
-    $record_id = createNewRecordID($project);
+    $record_id = createNewRecordID($project, $org);
     $module->emDebug("This is the new record id: " . $record_id);
 
     // Retrieve all unique rows and load them into the Redcap project
@@ -810,8 +812,8 @@ function runQueryAndLoadDB($sql, $dbtable, $headers, $debug_msg, $error_msg) {
     return $status;
 }
 
-function createNewRecordID($project) {
+function createNewRecordID($project, $org) {
 
     $project_name = str_replace(' ', '_', $project);
-    return $project_name . date('_Ymd_Gis');
+    return $project_name . "_" . $org . date('_Ymd_Gis');
 }
