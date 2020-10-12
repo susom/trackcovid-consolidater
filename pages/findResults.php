@@ -146,11 +146,15 @@ foreach($configs as $fields => $list) {
         $data_to_save = matchRecords($results_table, $pcr_field_list, $ab_field_list);
 
         // Save the results that we found from the matches
-        $status = saveResults($data_to_save);
-        if ($status) {
-            $module->emDebug("Successfully saved updated lab data for project $pid for config: " . $list['fields']);
+        if (empty($data_to_save)) {
+            $module->emDebug("There are no records to save for project $pid, for config " . $list['fields']);
         } else {
-            $module->emError("Error with updates for project $pid, for config " . $list['fields']);
+            $status = saveResults($data_to_save);
+            if ($status) {
+                $module->emDebug("Successfully saved updated lab data for project $pid for config: " . $list['fields']);
+            } else {
+                $module->emError("Error with updates for project $pid, for config " . $list['fields']);
+            }
         }
     }
 }
@@ -655,7 +659,7 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
         $one_record[] = $record['lra_ab_match_methods___5'];
         array_push($data_to_save, '("' . implode('","', $one_record) . '")');
     }
-    $module->emDebug("retrieved lra data: " . json_encode($data_to_save));
+    //$module->emDebug("retrieved lra data: " . json_encode($data_to_save));
 
 
     // Push the current project's data into the results table
