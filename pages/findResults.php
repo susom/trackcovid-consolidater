@@ -413,11 +413,8 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
             ' join track_covid_project_records pr on pr.record_id = mrn.record_id ' .
         ' where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT) ' .
         ' and rm.COMPONENT_ABBR = "PCR" ' .
-        ' and (rm.birth_date != "0000-00-00" AND rm.birth_date is not null and rm.birth_date != "") ' .
-        ' and mrn.dob != "" ';
-    if ($org == 'STANFORD') {
-        $sql .= ' and (pr.pcr_id is null or pr.pcr_id = "") ';
-    } else {
+        ' and rm.birth_date is not null ';
+    if ($org == 'UCSF') {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
     $module->emDebug("PCR results on MRN/DOB/Encounter Date query: " . $sql);
@@ -451,11 +448,8 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                 ' join track_covid_project_records pr on pr.record_id = mrn.record_id ' .
         ' where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT) ' .
         ' and rm.COMPONENT_ABBR = "IGG" ' .
-        ' and (rm.birth_date != "0000-00-00" AND rm.birth_date is not null and rm.birth_date != "") ' .
-        ' and mrn.dob != "" ';
-    if ($org == 'STANFORD') {
-        $sql .= ' and (pr.igg_id is null or pr.igg_id = "") ';
-    } else {
+        ' and rm.birth_date is not null ';
+    if ($org == 'UCSF') {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
 
@@ -768,7 +762,7 @@ function unmatchedLabResults($project, $dag_name, $org) {
         "with xxx as   ( " .
         "    select distinct * " .
         "       from track_covid_unmatched " .
-        "       where spec_taken_instant > date('2020-07-01 00:00:00') " .
+        "       where spec_taken_instant > date('2020-05-05 00:00:00') " .
         ") " .
         "select '" . $record_id . "', 'unmatched_results', " .
         "   row_number() over (order by spec_taken_instant, pat_mrn_id) as redcap_repeat_instance, " .
