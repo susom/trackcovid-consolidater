@@ -187,7 +187,9 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	    // We need to check the IRB and privacy report before retrieving data.  All the projects
         // are under the same IRB so it doesn't matter which project IRB number we are checking, just
         // retrieve one of them.
-        $irb_pid = $this->getSystemSetting('chart-pid');
+        //$irb_pid = $this->getSystemSetting('chart-pid');
+        // Looks like the cron can't get system settings
+        $irb_pid = 19520;
 
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
         // to the temporary directory in REDCap.
