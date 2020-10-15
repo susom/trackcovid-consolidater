@@ -19,7 +19,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                                                 'COHORT', 'ENTITY', 'METHOD_DESC');
 	private $db_result_header_order = array();
 
-    protected $irb_pid = 19520;
+	protected $irb_pid = 19520;
 
     public function __construct() {
 		parent::__construct();
@@ -183,8 +183,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      */
     public function loadStanfordData() {
 
-        global $irb_pid;
-
 	    $this->emDebug("Process CSV DATA for this project");
 	    $status = false;
 
@@ -192,7 +190,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         // to the temporary directory in REDCap.
         // **** Switch this when not debugging ****//
         //$filename = APP_PATH_TEMP . 'Stanford_10012020.csv';
-        $filename = $this->getStanfordTrackCovidResults($irb_pid);
+        $filename = $this->getStanfordTrackCovidResults($this->irb_pid);
 
         if ($filename == false) {
             $this->emError("Could not retrieve Stanford lab results for " . date('Y-m-d'));
