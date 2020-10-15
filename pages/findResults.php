@@ -40,7 +40,7 @@ $autoload_field_list = $pcr_field_list . ',' . $ab_field_list;
 $redcap_headers = $collection_headers . ',' . $autoload_field_list;
 $autoloader_fields = array('lra_pcr_result', 'lra_pcr_date', 'lra_pcr_assay_method', 'lra_pcr_match_methods',
                             'lra_ab_result', 'lra_ab_date', 'lra_ab_assay_method', 'lra_ab_match_methods');
-
+$unmatched_mrns = array();
 
 // We will filter samples based on the location they were taken.  If we are processing Stanford
 // data, we only want to look for samples that were processed by Stanford. We are using testing
@@ -139,7 +139,7 @@ foreach($configs as $fields => $list) {
         $status = $module->pushDataIntoDB($dbtable, $redcap_headers, $records);
         if (!status) {
             $module->emError("Error when pushing data to table $dbtable for project $pid");
-            return false;
+            $status = false;
         }
 
         // Now both database tables are loaded.  Match the redcap records with the results
@@ -159,12 +159,14 @@ foreach($configs as $fields => $list) {
     }
 }
 
-$return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
-$retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
+if ($status) {
+    $return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
+    $retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
 
-// Figure out which results were not used in matching records and store them in a new project
-$status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
-                        $return_fields, $autoload_field_list, $org);
+    // Figure out which results were not used in matching records and store them in a new project
+    $status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
+        $return_fields, $autoload_field_list, $org);
+}
 
 print $status;
 
@@ -664,11 +666,20 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
         return false;
     }
 
-    $status = unmatchedLabResults($project, $dag_name, $org);
+    $status_dontcare = unmatchedLabResults($project, $dag_name, $org);
+    $status_dontcare = unmatchedMRNs($project, $dag_name, $org);
 
     return $status;
 }
 
+/**
+ * This function will find results with MRNs that match an MRN in the project but the result does not match
+ *
+ * @param $project
+ * @param $dag_name
+ * @param $org
+ * @return bool
+ */
 function unmatchedLabResults($project, $dag_name, $org) {
 
     global $module, $pid;
@@ -685,21 +696,6 @@ function unmatchedLabResults($project, $dag_name, $org) {
     }
 
     $module->truncateDb($unmatched_table);
-
-    // Find the PCR results that don't have an MRN in our project - this will usually indicate that
-    // the MRN in the Redcap project is incorrect
-    $sql =
-        "select distinct rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
-        "        rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
-        "    from track_covid_result_match rm " .
-        "    where rm.pat_mrn_id not in (select mrn from track_covid_mrn_dob) " .
-        "    and rm.COHORT = '" . $project . "'" .
-        "    and rm.COMPONENT_ABBR = 'PCR' " .
-        "order by rm.pat_mrn_id, rm.SPEC_TAKEN_INSTANT";
-
-    $debug_msg = "These are the results from PCR query with unmatched MRNs for project " . $project;
-    $error_msg = "Error loading results from PCR query with unmatched MRNs for project " . $project;
-    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
 
     // This is the query for matched MRNs but unmatched dates
     $sql =
@@ -720,20 +716,6 @@ function unmatchedLabResults($project, $dag_name, $org) {
     $error_msg = "Error loading results from PCR query with matched MRNs and unmatched dates for project " . $project;
     $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
 
-    // Find the IGG results that don't have an MRN in our project - this will usually indicate that
-    // the MRN in the Redcap project is incorrect
-    $sql =
-        "select distinct rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
-        "        rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
-        "    from track_covid_result_match rm " .
-        "    where rm.pat_mrn_id not in (select mrn from track_covid_mrn_dob) " .
-        "    and rm.COHORT = '" . $project . "'" .
-        "    and rm.COMPONENT_ABBR = 'IGG' " .
-        "order by rm.pat_mrn_id, rm.SPEC_TAKEN_INSTANT";
-
-    $debug_msg = "These are the results from IGG query with unmatched MRNs for project " . $project;
-    $error_msg = "Error loading results from IGG query with unmatched MRNs for project " . $project;
-    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
 
     // This is the IGG query for matched MRNs but unmatched result dates
     $sql =
@@ -786,6 +768,89 @@ function unmatchedLabResults($project, $dag_name, $org) {
 
     return true;
 }
+
+
+function unmatchedMRNs($project, $dag_name, $org) {
+
+    global $module, $pid;
+
+    $unmatched_table = "track_covid_unmatched";
+    $unmatched_headers = array("pat_mrn_id", "pat_name", "birth_date", "spec_taken_instant",
+        "component_abbr", "ord_value", "mpi_id", "cohort");
+
+    // Retrieve the project where the Unmatched Records will be stored
+    $unmatched_project = $module->getSystemSetting('unmatched');
+    if (empty($unmatched_project)) {
+        $module->emDebug("Project for unmatched results is not selected so skipping processing");
+        return true;
+    }
+
+    $module->truncateDb($unmatched_table);
+
+    // Find the PCR results that don't have an MRN in our project - this will usually indicate that
+    // the MRN in the Redcap project is incorrect
+    $sql =
+        "select distinct rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
+        "        rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
+        "    from track_covid_result_match rm " .
+        "    where rm.pat_mrn_id not in (select mrn from track_covid_mrn_dob) " .
+        "    and rm.COHORT = '" . $project . "'" .
+        "    and rm.COMPONENT_ABBR = 'PCR' " .
+        "order by rm.pat_mrn_id, rm.SPEC_TAKEN_INSTANT";
+
+    $debug_msg = "These are the results from PCR query with unmatched MRNs for project " . $project;
+    $error_msg = "Error loading results from PCR query with unmatched MRNs for project " . $project;
+    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
+
+
+    // Find the IGG results that don't have an MRN in our project - this will usually indicate that
+    // the MRN in the Redcap project is incorrect
+    $sql =
+        "select distinct rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
+        "        rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
+        "    from track_covid_result_match rm " .
+        "    where rm.pat_mrn_id not in (select mrn from track_covid_mrn_dob) " .
+        "    and rm.COHORT = '" . $project . "'" .
+        "    and rm.COMPONENT_ABBR = 'IGG' " .
+        "order by rm.pat_mrn_id, rm.SPEC_TAKEN_INSTANT";
+
+    $debug_msg = "These are the results from IGG query with unmatched MRNs for project " . $project;
+    $error_msg = "Error loading results from IGG query with unmatched MRNs for project " . $project;
+    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
+
+    $record_id = createNewRecordID($project, $org);
+    $record_id .= 'noMRNs';
+    $module->emDebug("This is the new record id: " . $record_id);
+
+    // Retrieve all unique rows and load them into the Redcap project
+    $sql =
+        "with xxx as   ( " .
+        "    select distinct * " .
+        "       from track_covid_unmatched " .
+        "       where spec_taken_instant > date('2020-05-05 00:00:00') " .
+        ") " .
+        "select '" . $record_id . "', 'unmatched_results', " .
+        "   row_number() over (order by spec_taken_instant, pat_mrn_id) as redcap_repeat_instance, " .
+        "   pat_mrn_id, pat_name, birth_date, spec_taken_instant, " .
+        "   component_abbr, ord_value, mpi_id, cohort from xxx";
+    $q = db_query($sql);
+
+    // Create json objects that we can easily load into redcap.
+    $redcap_headers = array("record_id", "redcap_repeat_instrument", "redcap_repeat_instance");
+    $all_headers = array_merge($redcap_headers, $unmatched_headers);
+
+    $unmatched = array();
+    while ($results = db_fetch_assoc($q)) {
+        $unmatched[] = array_combine($all_headers, $results);
+    }
+
+    // Save the record with the correct DAG
+    $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched));
+    $module->emDebug("Return from saveData from unmatched MRNs: " . json_encode($return));
+
+    return true;
+}
+
 
 function runQueryAndLoadDB($sql, $dbtable, $headers, $debug_msg, $error_msg) {
 

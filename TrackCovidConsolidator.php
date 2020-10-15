@@ -19,6 +19,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                                                 'COHORT', 'ENTITY', 'METHOD_DESC');
 	private $db_result_header_order = array();
 
+    protected $irb_pid = 19520;
+
     public function __construct() {
 		parent::__construct();
 		// Other code to run when object is instantiated
@@ -181,15 +183,10 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      */
     public function loadStanfordData() {
 
+        global $irb_pid;
+
 	    $this->emDebug("Process CSV DATA for this project");
 	    $status = false;
-
-	    // We need to check the IRB and privacy report before retrieving data.  All the projects
-        // are under the same IRB so it doesn't matter which project IRB number we are checking, just
-        // retrieve one of them.
-        //$irb_pid = $this->getSystemSetting('chart-pid');
-        // Looks like the cron can't get system settings
-        $irb_pid = 19520;
 
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
         // to the temporary directory in REDCap.
@@ -225,6 +222,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
     public function processAllProjects() {
 
         $status = false;
+
         //get all projects that are enabled for this module
         $enabled = ExternalModules::getEnabledProjects($this->PREFIX);
         $this->emDebug("Enabled Projects: " . json_encode($enabled));
@@ -247,6 +245,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                 $this->emDebug("Processing for project $pid was successful");
             }
         }
+
         return $status;
     }
 
@@ -334,5 +333,37 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
     }
 
+    /**
+     * Process new CSV in the REDCAP temp folder which holds appointment data - this method is for the CRON
+     */
+    /*
+    public function loadStanfordApptData() {
 
+        global $irb_pid;
+
+        $this->emDebug("Process appointment data");
+        $status = false;
+        */
+
+        // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
+        // to the temporary directory in REDCap.
+        // Switch this when not debugging
+        //$filename = APP_PATH_TEMP . 'Stanford_10012020.csv';
+
+        /*
+        $filename = $this->getStanfordTrackCovidAppts($irb_pid);
+
+        if ($filename == false) {
+            $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
+        } else {
+            $this->emDebug("Successfully retrieved Stanford appointment data");
+
+            $status = $this->processAppointments($filename);
+
+            $this->discardCSV($filename);
+        }
+
+        return $status;
+    }
+    */
 }
