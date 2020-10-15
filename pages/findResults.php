@@ -701,12 +701,13 @@ function unmatchedLabResults($project, $dag_name, $org) {
     $sql =
         "select rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
                 " rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
-            " from track_covid_result_match rm " .
+            " from track_covid_result_match rm, track_covid_mrn_dob mrn " .
             " where rm.COHORT in ('" . $project . "', 'OTHER') " .
+            " and rm.pat_mrn_id = mrn.mrn " .
             " and rm.COMPONENT_ABBR = 'PCR' " .
             " and rm.SPEC_TAKEN_INSTANT not in " .
             "       (select lra_pcr_date " .
-            "           from track_covid_found_results proj join track_covid_mrn_dob mrn " .
+            "           from track_covid_found_results proj " .
             "           where proj.record_id = mrn.record_id " .
             "           and mrn.mrn = rm.pat_mrn_id " .
             "           and proj.lra_pcr_date is not null) " .
@@ -721,12 +722,13 @@ function unmatchedLabResults($project, $dag_name, $org) {
     $sql =
         "select rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
         " rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
-        " from track_covid_result_match rm " .
+        " from track_covid_result_match rm, track_covid_mrn_dob mrn " .
         " where rm.COHORT in ('" . $project . "', 'OTHER') " .
         " and rm.COMPONENT_ABBR = 'IGG' " .
+        " and rm.pat_mrn_id = mrn.mrn " .
         " and rm.SPEC_TAKEN_INSTANT not in " .
         "       (select lra_ab_date " .
-        "           from track_covid_found_results proj join track_covid_mrn_dob mrn " .
+        "           from track_covid_found_results proj " .
         "           where proj.record_id = mrn.record_id " .
         "           and mrn.mrn = rm.pat_mrn_id " .
         "           and proj.lra_ab_date is not null) " .
