@@ -40,7 +40,6 @@ $autoload_field_list = $pcr_field_list . ',' . $ab_field_list;
 $redcap_headers = $collection_headers . ',' . $autoload_field_list;
 $autoloader_fields = array('lra_pcr_result', 'lra_pcr_date', 'lra_pcr_assay_method', 'lra_pcr_match_methods',
                             'lra_ab_result', 'lra_ab_date', 'lra_ab_assay_method', 'lra_ab_match_methods');
-$unmatched_mrns = array();
 
 // We will filter samples based on the location they were taken.  If we are processing Stanford
 // data, we only want to look for samples that were processed by Stanford. We are using testing
@@ -502,8 +501,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
 
     // First copy over the records/events that we are looking for results for
     $sql = 'insert into track_covid_found_results (record_id, redcap_event_name) ' .
-                ' select record_id, redcap_event_name from track_covid_project_records ' .
-                    ' where (date_collected != "" and date_collected is not null)';
+                ' select record_id, redcap_event_name from track_covid_project_records ';
     $q = db_query($sql);
     $num_rows = db_num_rows($q);
     $module->emDebug("Inserted rows into track_covid_found_results: " . $num_rows);
