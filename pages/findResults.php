@@ -332,7 +332,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
             '       when "Negative"                     then 0 ' .
             '       when "Detected"                     then 1 ' .
             '       when "DETECTED"                     then 1 ' .
-            '       else                                2' .
+            '       else                                98' .
             ' end as lra_pcr_result, ' .
             ' rm.spec_taken_instant as lra_pcr_date, ' .
             ' rm.method_desc as lra_pcr_assay_method, ' .
@@ -346,7 +346,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
             ' join track_covid_project_records pr ' .
                 ' on mrn.record_id = pr.record_id and rm.mpi_id = pr.pcr_id ' .
         ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
-        ' and rm.COMPONENT_ABBR = "PCR" ';
+        ' and rm.COMPONENT_ABBR = "PCR" ' ;
     $module->emDebug("PCR MRN/MPI_ID query: " . $sql);
 
     $q = db_query($sql);
@@ -363,7 +363,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                     ' when "NEG"         then 0 ' .
                     ' when "Positive"    then 1 ' .
                     ' when "POS"         then 1 ' .
-                    ' else               2 ' .
+                    ' else               98 ' .
                 ' end as lra_ab_result, ' .
                 ' rm.spec_taken_instant as lra_ab_date,' .
                 ' rm.method_desc as lra_ab_assay_method, ' .
@@ -400,7 +400,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                 '      when "Detected"                     then 1 ' .
                 '      when "DETECTED"                     then 1 ' .
                 '      when "TEST NOT PERFORMED"           then 98 '.
-                '      else                                2' .
+                '      else                                98 ' .
                 ' end as lra_pcr_result, ' .
             ' rm.spec_taken_instant as lra_pcr_date, ' .
             ' rm.method_desc as lra_ab_assay_method, ' .
@@ -414,7 +414,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
             ' join track_covid_project_records pr on pr.record_id = mrn.record_id ' .
         ' where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT) ' .
         ' and rm.COMPONENT_ABBR = "PCR" ' .
-        ' and rm.birth_date is not null ';
+        ' and rm.birth_date is not null ' ;
     if ($org == 'UCSF') {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
@@ -435,7 +435,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                     ' when "NEG"         then 0 ' .
                     ' when "Positive"    then 1 ' .
                     ' when "POS"         then 1 ' .
-                    ' else               2 ' .
+                    ' else               98 ' .
                 ' end as lra_ab_result, ' .
                 ' rm.spec_taken_instant as lra_ab_date, ' .
                 ' rm.method_desc as lra_ab_assay_method, ' .
