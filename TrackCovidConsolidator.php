@@ -19,8 +19,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                                                 'COHORT', 'ENTITY', 'METHOD_DESC');
 	private $db_result_header_order = array();
 
-	protected $irb_pid = 19520;
-
     public function __construct() {
 		parent::__construct();
 		// Other code to run when object is instantiated
@@ -183,14 +181,17 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      */
     public function loadStanfordData() {
 
-	    $this->emDebug("Process CSV DATA for this project");
+        $this->emDebug("Starting the load process for Stanford labs");
+
+        // Retrieve the project ID to use to check the IRB
+        $irb_pid = $this->getSystemSetting('chart-pid');
 	    $status = false;
 
-	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
+	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be written
         // to the temporary directory in REDCap.
         // **** Switch this when not debugging ****//
-        //$filename = APP_PATH_TEMP . 'Stanford_10012020.csv';
-        $filename = $this->getStanfordTrackCovidResults($this->irb_pid);
+        //$filename = APP_PATH_TEMP . 'Stanford_10142020.csv';
+        $filename = $this->getStanfordTrackCovidResults($irb_pid);
 
         if ($filename == false) {
             $this->emError("Could not retrieve Stanford lab results for " . date('Y-m-d'));
@@ -206,7 +207,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
             $status = $this->processAllProjects();
 
-            // TODO: Should the file be deleted from the temp directory?
+            // Delete the file after the lab results were loaded
             $this->discardCSV($filename);
         }
 
@@ -214,9 +215,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	}
 
     /**
-     * Process all projects for this location
+     * Process all projects for this location for lab result data
      */
-
     public function processAllProjects() {
 
         $status = false;
@@ -280,7 +280,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      */
     public function loadUCSFData() {
 
-        $this->emDebug("In loadUCSFData");
+        $this->emDebug("Starting loader for UCSF data to run lab results");
         $status = false;
 
         $filename = APP_PATH_TEMP . 'UCSF_data.csv';
@@ -334,34 +334,73 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
     /**
      * Process new CSV in the REDCAP temp folder which holds appointment data - this method is for the CRON
      */
-    /*
     public function loadStanfordApptData() {
 
-        global $irb_pid;
-
-        $this->emDebug("Process appointment data");
+        // Retrieve the chart pid so we can check the IRB
+        $irb_pid = $this->getSystemSetting('chart-pid');
+        $this->emDebug("Process appointment data: IRB project id $irb_pid");
         $status = false;
-        */
 
         // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
         // to the temporary directory in REDCap.
         // Switch this when not debugging
-        //$filename = APP_PATH_TEMP . 'Stanford_10012020.csv';
+        try {
+            $RSL = \ExternalModules\ExternalModules::getModuleInstance('redcap_to_starr_link');
+            $filename = $RSL->getStanfordTrackCovidAppts($irb_pid);
+            //$filename = APP_PATH_TEMP . 'StanfordAppt_10142020.csv';
+            if ($filename == false) {
+                $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
+            } else {
+                $this->emDebug("Successfully retrieved Stanford appointment data");
 
-        /*
-        $filename = $this->getStanfordTrackCovidAppts($irb_pid);
+                // Load all projects that have the checkbox set in the EM config
+                $status = $this->processAppointments($filename);
 
-        if ($filename == false) {
-            $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
-        } else {
-            $this->emDebug("Successfully retrieved Stanford appointment data");
+                // Delete the appointment file after processing
+                $this->discardCSV($filename);
 
-            $status = $this->processAppointments($filename);
-
-            $this->discardCSV($filename);
+            }
+        } catch (Exception $ex) {
+            $this->emError("Could not instantiate REDCap to STARR link to retrieve Stanford Appointment data");
         }
 
         return $status;
     }
-    */
+
+    /**
+     * Send the filename to the page which will process and load the appointments
+     *
+     * @param $filename
+     * @return bool
+     */
+    public function processAppointments($filename) {
+
+        $status = false;
+
+        //get all projects that are enabled for this module
+        $enabled = ExternalModules::getEnabledProjects($this->PREFIX);
+        $this->emDebug("Enabled Projects: " . json_encode($enabled));
+
+        // Loop over each project that has this module enabled
+        while($proj = $enabled->fetch_assoc()) {
+
+            $pid = $proj['project_id'];
+
+            // Create the API URL to this project.
+            $this_url = $this->getUrl('pages/findAppointments.php?pid=' . $pid, true, true) .
+                        "&filename=" . $filename;
+            $this->emDebug("Calling cron to process appointments for project $pid at URL " . $this_url);
+
+            // Go into project context and process data for this project
+            $status = http_get($this_url);
+            if ($status == false) {
+                $this->emError("Processing appointments for project $pid failed");
+            } else {
+                $this->emDebug("Processing appointments for project $pid was successful");
+            }
+        }
+
+        return $status;
+    }
+
 }

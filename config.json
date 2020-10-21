@@ -41,11 +41,17 @@
                 "name": "TrackCovid: Load Stanford Lab Data",
                 "icon": "gear",
                 "url": "pages/MatchStanfordLabData.php"
+            },
+            {
+                "name": "TrackCovid: Load Stanford Appointment Data",
+                "icon": "gear",
+                "url": "pages/MatchStanfordApptData.php"
             }
 		]
 	},
 	"no-auth-pages": [
-        "pages/findResults"
+        "pages/findResults",
+        "pages/findAppointments"
     ],
 	"project-settings": [
 		{
@@ -83,6 +89,12 @@
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>Event</span></h6>Event where the MRN and DoB reside",
             "required": true,
             "type": "event-list"
+        },
+        {
+            "key": "load-appointments",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Load appointments</span></h6>When checked, the appointment loader will load appointments retrieved from STARR",
+            "required": false,
+            "type": "checkbox"
         },
         {
             "key": "lab-fields",
