@@ -72,7 +72,7 @@ if (empty($records)) {
 // Retrieve in array format so we can compare to see if the value has changed
 $params = array(
     'return_format' => 'array',
-    'fields'        => array('record_id', 'redcap_event_name', 'lra_date_scheduled')
+    'fields'        => array('record_id', 'redcap_event_name', 'lra_date_scheduled', 'lra_appt_status')
 );
 $appt_records = REDCap::getData($params);
 $module->emDebug("This is the project appointment date count: " . json_encode(count($appt_records)));
@@ -121,7 +121,8 @@ foreach($records as $record => $list) {
 
             $orig_appt_note = $appt['appt_note'];
             $appointment_date = $appt['appt_date'];
-            $first_replace = str_replace($unwanted_chars, $replace_chars, strtoupper($appt['appt_note']));
+            $appt_status = $appt['appt_status'];
+            $first_replace = str_replace($unwanted_chars, $replace_chars, strtoupper($orig_appt_note));
             $appt_visit = str_replace($unwanted_chars2, $replace_chars2, $first_replace);
 
             // Try to figure out which visit event this appointment belongs
@@ -133,7 +134,7 @@ foreach($records as $record => $list) {
                     // These bonus visits are for chart.
                     //  Bonus visit 1 = 11, Bonus visit 2 = 12, Bonus visit 3 = 13, Bonus visit 4 = 14
                     if (!is_numeric($one_char)) {
-                        if ($xxx = strpos($appt_visit, 'B1') !== false) {
+                        if (strpos($appt_visit, 'B1') !== false) {
                             $visit_num = 11;
                         } else if (strpos($appt_visit, 'BONUS1') !== false) {
                             $visit_num = 11;
@@ -174,12 +175,20 @@ foreach($records as $record => $list) {
                     if (empty($found_events[$mrn]) or (!in_array($events[$visit_num], $found_events[$mrn]))) {
                         $new_appt_date = date("Y-m-d H:i:s", strtotime($appointment_date));
                         $saved_appt_date = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_date_scheduled'];
+                        $saved_appt_status = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_appt_status'];;
 
                         // If the new appointment date is the same as the already saved date, no need to re-save.
-                        if ($saved_appt_date != $new_appt_date) {
+                        if (($saved_appt_date != $new_appt_date) or ($saved_appt_status != $appt_status)) {
                             $one_event['record_id'] = $record_mrns[$mrn];
                             $one_event['redcap_event_name'] = $events[$visit_num];
                             $one_event['lra_date_scheduled'] = $new_appt_date;
+                            if ($appt_status == 'Scheduled') {
+                                $one_event['lra_appt_status'] = 1;
+                            } else if ($appt_status == 'Completed') {
+                                $one_event['lra_appt_status'] = 2;
+                            } else {
+                                $one_event['lra_appt_status'] = 99;
+                            }
                             $update_visits[] = $one_event;
                             $found_events[$mrn][] = $events[$visit_num];
                         }
@@ -192,9 +201,9 @@ foreach($records as $record => $list) {
 }
 
 if (!empty($update_visits)) {
-    $module->emDebug("Number of records to update: " . count($update_visits));
+    $module->emDebug("Number of appointment records to update: " . count($update_visits));
     $return = REDCap::saveData('json', json_encode($update_visits, true));
-    $module->emDebug("Return from saveData: " . json_encode($return));
+    $module->emDebug("Return from appointment saveData: " . json_encode($return));
 }
 
 $status = true;

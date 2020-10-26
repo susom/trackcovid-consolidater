@@ -158,7 +158,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	/**
      * Once CSV DATA is handled for THIS project... it still needs to live for the other projects.
      */
-    public function discardCSV($filename) {
+    private function discardCSV($filename) {
 		unlink($filename);
 	}
 
@@ -217,7 +217,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
     /**
      * Process all projects for this location for lab result data
      */
-    public function processAllProjects() {
+    private function processAllProjects() {
 
         $status = false;
 
@@ -373,7 +373,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      * @param $filename
      * @return bool
      */
-    public function processAppointments($filename) {
+    private function processAppointments($filename) {
 
         $status = false;
 
@@ -402,5 +402,24 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         return $status;
     }
+
+    public function fillInApptWindowLimits() {
+
+        // Retrieve Chart pid
+        $chart_pid = $this->getSystemSetting('chart-pid');
+        $this->emDebug("Process and load window calculations for Chart: $chart_pid");
+
+        // Generate the URL
+        $this_url = $this->getUrl('pages/calcVisitWindow.php?pid=' . $chart_pid, true, true);
+        $status = http_get($this_url);
+        if ($status == false) {
+            $this->emError("Processing visit windows for project $chart_pid failed");
+        } else {
+            $this->emDebug("Processing visit windows for project $chart_pid was successful");
+        }
+
+        return $status;
+    }
+
 
 }

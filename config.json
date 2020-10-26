@@ -34,8 +34,13 @@
 				"name": "TrackCovid: Load UCSF Lab Data",
                 "icon": "gear",
                 "url": "pages/MatchUCSFLabData.php"
-			}
-		],
+			},
+            {
+                "name": "TrackCovid: Calculate window dates",
+                "icon": "gear",
+                "url": "pages/CalculateWindowDates.php"
+            }
+        ],
 		"control-center": [
             {
                 "name": "TrackCovid: Load Stanford Lab Data",
@@ -47,11 +52,12 @@
                 "icon": "gear",
                 "url": "pages/MatchStanfordApptData.php"
             }
-		]
+        ]
 	},
 	"no-auth-pages": [
         "pages/findResults",
-        "pages/findAppointments"
+        "pages/findAppointments",
+        "pages/calcVisitWindow"
     ],
 	"project-settings": [
 		{
@@ -164,8 +170,22 @@
             "cron_weekday": 0,
             "cron_hour":    19,
             "cron_minute":  0
+        },
+        {
+            "cron_name": "load_stanford_appt_data",
+            "cron_description": "This cron will run daily at 7:30pm to pull data from STARR and load appointment data into TrackCovid projects.",
+            "method": "loadStanfordApptData",
+            "cron_hour":    19,
+            "cron_minute":  30
+        },
+        {
+            "cron_name": "load_calc_visit_windows",
+            "cron_description": "This cron will run once a week at 7:50pm to calculate visit windows for each event",
+            "method": "fillInApptWindowLimits",
+            "cron_weekday": 0,
+            "cron_hour":    19,
+            "cron_minute":  50
         }
-
     ],
 
 	"compatibility": {
