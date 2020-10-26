@@ -57,7 +57,7 @@ if ($action == "calc") {
         }
 
         // If we found a date to use as baseline, calculate the visit windows
-        if (!is_null($use_date)) {
+        if (!is_null($use_date) and ($record_id != 2792)) {
             $this_record = calculateWindowLimits($record_id, $use_date);
         }
 
