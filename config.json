@@ -67,6 +67,12 @@
 			"type": "checkbox"
 		},
         {
+            "key": "skip-covid-window",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Covid Window Records to Skip</span></h6>Comma separated list of records to skip when processing covid windows",
+            "required": false,
+            "type": "text"
+        },
+        {
             "key": "stanford-birth-date",
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>Stanford Birth date field</span></h6>Field which stores the Stanford birthdate",
             "required": true,

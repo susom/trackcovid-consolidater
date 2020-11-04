@@ -10,13 +10,20 @@ $pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
 $chart_pid = $module->getSystemSetting('chart-pid');
 if ($pid != $chart_pid) {
     $module->emError("This module should only be run on the Chart study and not pid $pid");
-    print false;
+    print true;
     return;
 }
 
 $module->emDebug("Action is $action, and pid is $pid");
 
 if ($action == "calc") {
+
+    // Retrieve the comma separated list of records to skip - usually because those records are locked
+    // and will stop the save process
+    $skip_list = $module->getProjectSetting('skip-covid-window');
+    $list_of_skip_records = strtolower(str_replace(' ', '', $skip_list));
+    $skip_records = explode(',', $list_of_skip_records);
+    $module->emDebug("List of records to skip: " . json_encode($skip_records));
 
     $baseline_event = 'baseline_arm_1';
     $baseline_event_id = REDCap::getEventIdFromUniqueEvent($baseline_event);
@@ -35,6 +42,18 @@ if ($action == "calc") {
         $module->emDebug("There are no records in project " . $pid . ". Skipping visit window processing");
         return true;
     }
+
+    // Retrieve the records in wk2 so we can compare if the dates have changed. If not,
+    // the windows do not need to be updated
+    $wk2_event_name = 'wk2_arm_1';
+    $params = array(
+        'return_format' => 'array',
+        'fields' => array('record_id', 'redcap_event_name', 'visit_window_lower', 'visit_window_upper'),
+        'events' => $wk2_event_name
+    );
+    $wk2_dates = REDCap::getData($params);
+    $module->emDebug("This is the count of the wk2 records: " . count($wk2_dates));
+    $wk2_event_id = REDCap::getEventIdFromUniqueEvent($wk2_event_name);
 
     // Loop over all records to set visit windows
     $save_data = '';
@@ -57,14 +76,14 @@ if ($action == "calc") {
         }
 
         // If we found a date to use as baseline, calculate the visit windows
-        if (!is_null($use_date) and ($record_id != 2792)) {
-            $this_record = calculateWindowLimits($record_id, $use_date);
-        }
+        if (!is_null($use_date) and (is_null($skip_records) or !in_array($record_id, $skip_records))) {
+            $this_record = calculateWindowLimits($record_id, $use_date, $wk2_dates, $wk2_event_id);
 
-        if (($save_data != '') and ($this_record != '')) {
-            $save_data .= ',' . $this_record;
-        } else if ($save_data == '') {
-            $save_data = $this_record;
+            if (($save_data != '') and ($this_record != '')) {
+                $save_data .= ',' . $this_record;
+            } else if ($save_data == '') {
+                $save_data = $this_record;
+            }
         }
 
     }
@@ -72,20 +91,21 @@ if ($action == "calc") {
     // Once we calculate windows for each event, save the data in Redcap
     if ($save_data != '') {
         $save_data = '[' . $save_data . ']';
-        $module->emDebug("Starting to save data for window date calculations");
         $return = REDCap::saveData('json', $save_data);
         $module->emDebug("Return from window date calculations saveData: " . json_encode($return));
         $status = true;
     } else {
-        $module->emDebug("Not saving window data for Chart");
-        $status = false;
+        $module->emDebug("No visit window dates to save");
+        $status = true;
     }
 
     print $status;
     return;
 }
 
-function calculateWindowLimits($record_id, $baseline_date) {
+function calculateWindowLimits($record_id, $baseline_date, $wk2_dates, $wk2_event_id) {
+
+    global $module;
 
     // Find out the lower and upper windows for each event based on baseline date
     $lower = -7;
@@ -116,6 +136,13 @@ function calculateWindowLimits($record_id, $baseline_date) {
 
         if (!empty($data_to_save)) {
             $data_to_save .= ',';
+        }
+
+        if ($this_record['redcap_event_name'] == 'wk2_arm_1') {
+            if (($this_record['visit_window_lower'] == $wk2_dates[$record_id][$wk2_event_id]['visit_window_lower'])
+                and ($this_record['visit_window_upper'] == $wk2_dates[$record_id][$wk2_event_id]['visit_window_upper'])) {
+                break;
+            }
         }
 
         $data_to_save .= json_encode($this_record);
