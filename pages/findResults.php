@@ -62,6 +62,8 @@ if ($pid == $chart_pid) {
     return false;
 }
 
+$module->emDebug("PID: $pid, this proj: $this_proj");
+
 $allowable_orgs = array("STANFORD","UCSF");
 if (!in_array($org, $allowable_orgs)) {
     $module->emError("This is not a valid organization $org for project $pid");
@@ -117,7 +119,7 @@ foreach($configs as $fields => $list) {
     $field_array = explode(',', $list['fields']);
 
     // Create a filter for the organization whose results we are looking at
-    $filter = createRecordFilter($org, $LOCATIONS[$this_proj], $field_array);
+    $filter = createRecordFilter($org, $LOCATIONS[$this_proj], $field_array, $this_proj);
     $module->emDebug("Filter: $filter");
 
     // Retrieve these fields from the REDCap project
@@ -132,12 +134,13 @@ foreach($configs as $fields => $list) {
     // Load the database with the redcap record_id/event_names
     if (empty($records)) {
         $module->emDebug("There are no records that need processing for this config: " . $list['fields']);
+        $status = true;
     } else {
 
         // Push the current project's data into the table
         $status = $module->pushDataIntoDB($dbtable, $redcap_headers, $records);
-        if (!status) {
-            $module->emError("Error when pushing data to table $dbtable for project $pid");
+        if (!$status) {
+            $module->emDebug("Error when pushing data to table $dbtable for project $pid");
             $status = false;
         }
 
@@ -147,6 +150,7 @@ foreach($configs as $fields => $list) {
         // Save the results that we found from the matches
         if (empty($data_to_save)) {
             $module->emDebug("There are no records to save for project $pid, for config " . $list['fields']);
+            $status = true;
         } else {
             $status = saveResults($data_to_save);
             if ($status) {
@@ -155,17 +159,17 @@ foreach($configs as $fields => $list) {
                 $module->emError("Error with updates for project $pid, for config " . $list['fields']);
             }
         }
+
     }
 }
 
-if ($status) {
-    $return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
-    $retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
+// Whether or not the last status is good, create a record in the unmatched lab project
+$return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
+$retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
 
-    // Figure out which results were not used in matching records and store them in a new project
-    $status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
-        $return_fields, $autoload_field_list, $org);
-}
+// Figure out which results were not used in matching records and store them in a new project
+$status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
+                        $autoload_field_list, $org);
 
 print $status;
 
@@ -179,7 +183,7 @@ print $status;
  * @param $fields
  * @return string|null
  */
-function createRecordFilter($org, $org_options, $fields) {
+function createRecordFilter($org, $org_options, $fields, $this_proj) {
 
     global $module;
 
@@ -188,19 +192,22 @@ function createRecordFilter($org, $org_options, $fields) {
 
         if ($org == 'STANFORD') {
 
-            // Make sure we only retrieve samples that we taken and processed by Stanford
+            // Chart decided they didn't want to go by where the sample was taken because many of the date collection locations
+            // are left empty.  So we are going to look at where they work.  If they work at stanford, we will check the Stanford
+            // results.
             $org_filter = '[' . $fields[LOCATION_COLLECTED] . '] = ' . $this_org;
             if (is_null($filter)) {
                 $filter = $org_filter;
             } else {
                 $filter .= ' or ' . $org_filter;
             }
+
         } else if ($org == 'UCSF') {
 
             // Only bring in records where the tests were performed by UCSF.  Since we know which
             // sites are Stanford, we just need to look for samples that were NOT performed at
             // Stanford.
-            // TODO: We need to add the project to the filter for UCSF since there is a row in the CSV
+            // We need to add the project to the filter for UCSF since there is a row in the CSV
             // file that tells us which study each result belongs to.
 
             $org_filter = '[' . $fields[LOCATION_COLLECTED] . '] != ' . $this_org;
@@ -257,6 +264,7 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
 
     $module->emDebug("In getProjectRecords, getData params: " . json_encode($params));
     $q = REDCap::getData($params);
+
 
     // Replace all backslashs by blanks otherwise we can't load into the database
     // Sometimes there are backslashs put in the sample id fields and we want to delete them.
@@ -596,7 +604,7 @@ function saveResults($data_to_save) {
     $return = REDCap::saveData('json', json_encode($data_to_save));
 
     if(!empty($return["errors"])){
-        $module->emError("Error saving lab matches " . json_encode($return["errors"]));
+        $module->emDebug("Error saving lab matches " . json_encode($return["errors"]));
         $status = false;
     } else {
         $module->emDebug("Successfully saved data with item count: " . $return['item_count']);
@@ -612,7 +620,7 @@ function saveResults($data_to_save) {
  *      4) How many total cumulative positives (AB and PCR) and how many incremental positives are there?
  */
 function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
-                       $return_fields, $autoload_field_list, $org) {
+                       $autoload_field_list, $org) {
 
     global $module;
     $status = true;
@@ -653,14 +661,12 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
         $one_record[] = $record['lra_ab_match_methods___5'];
         array_push($data_to_save, '("' . implode('","', $one_record) . '")');
     }
-    //$module->emDebug("retrieved lra data: " . json_encode($data_to_save));
-
 
     // Push the current project's data into the results table
     $headers = "record_id,redcap_event_name," . $autoload_field_list;
     $status = $module->pushDataIntoDB($results_table, $headers, $data_to_save);
     if (!status) {
-        $module->emError("Error when pushing data to table $results_table for project $project");
+        $module->emDebug("Error when pushing data to table $results_table for project $project");
         return false;
     }
 
@@ -757,14 +763,29 @@ function unmatchedLabResults($project, $dag_name, $org) {
     $all_headers = array_merge($redcap_headers, $unmatched_headers);
 
     $unmatched = array();
+    $unmatched2 = array();
+    $ncnt = 0;
     while ($results = db_fetch_assoc($q)) {
-        $unmatched[] = array_combine($all_headers, $results);
+        $ncnt += 1;
+        if ($ncnt > 9999) {
+            $change_record_id = array_combine($all_headers, $results);
+            $change_record_id['record_id'] = $change_record_id['record_id'] . '_v2';
+            $unmatched2[] = $change_record_id;
+        } else {
+            $unmatched[] = array_combine($all_headers, $results);
+        }
     }
 
     // Save the record with the correct DAG
     $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched),
                                 'normal', 'YMD', 'flat', $dag_name);
-    $module->emDebug("Return from saveData: " . json_encode($return));
+    $module->emDebug("Return from saveData for unmatched labs: " . json_encode($return));
+    if (!empty($unmatched2)) {
+        $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2));
+        $module->emDebug("Return from saveData unmatched labs v2: " . json_encode($return));
+        $module->emDebug("Return from saveData record 2 from unmatched labs: " . json_encode($return));
+    }
+
 
     return true;
 }
@@ -839,14 +860,29 @@ function unmatchedMRNs($project, $dag_name, $org) {
     $redcap_headers = array("record_id", "redcap_repeat_instrument", "redcap_repeat_instance");
     $all_headers = array_merge($redcap_headers, $unmatched_headers);
 
+    // Since each redcap repeating instance can only have 10,000 records, split into a new record if we
+    // go over 9999
     $unmatched = array();
+    $unmatched2 = array();
+    $ncnt = 0;
     while ($results = db_fetch_assoc($q)) {
-        $unmatched[] = array_combine($all_headers, $results);
+        $ncnt += 1;
+        if ($ncnt > 9999) {
+            $change_record_id = array_combine($all_headers, $results);
+            $change_record_id['record_id'] = $change_record_id['record_id'] . '_v2';
+            $unmatched2[] = $change_record_id;
+        } else {
+            $unmatched[] = array_combine($all_headers, $results);
+        }
     }
 
     // Save the record with the correct DAG
     $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched));
     $module->emDebug("Return from saveData from unmatched MRNs: " . json_encode($return));
+    if (!empty($unmatched2)) {
+        $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2));
+        $module->emDebug("Return from saveData record 2 from unmatched MRNs: " . json_encode($return));
+    }
 
     return true;
 }
