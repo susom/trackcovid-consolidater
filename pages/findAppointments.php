@@ -110,6 +110,7 @@ $replace_chars2 = array('', '', '', '', '', '', '', '', '', '', '');
 
 $update_visits = array();
 $found_events = array();
+$overall_count = 0;
 
 foreach($records as $record => $list) {
 
@@ -176,21 +177,31 @@ foreach($records as $record => $list) {
                         $new_appt_date = date("Y-m-d H:i:s", strtotime($appointment_date));
                         $saved_appt_date = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_date_scheduled'];
                         $saved_appt_status = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_appt_status'];;
+                        if ($appt_status == 'Scheduled') {
+                            $new_appt_status = 1;
+                        } else if ($appt_status == 'Completed') {
+                            $new_appt_status = 2;
+                        } else {
+                            $new_appt_status = 99;
+                        }
 
                         // If the new appointment date is the same as the already saved date, no need to re-save.
-                        if (($saved_appt_date != $new_appt_date) or ($saved_appt_status != $appt_status)) {
+                        if (($saved_appt_date != $new_appt_date) or ($saved_appt_status != $new_appt_status)) {
                             $one_event['record_id'] = $record_mrns[$mrn];
                             $one_event['redcap_event_name'] = $events[$visit_num];
                             $one_event['lra_date_scheduled'] = $new_appt_date;
-                            if ($appt_status == 'Scheduled') {
-                                $one_event['lra_appt_status'] = 1;
-                            } else if ($appt_status == 'Completed') {
-                                $one_event['lra_appt_status'] = 2;
-                            } else {
-                                $one_event['lra_appt_status'] = 99;
-                            }
+                            $one_event['lra_appt_status'] = $new_appt_status;
                             $update_visits[] = $one_event;
                             $found_events[$mrn][] = $events[$visit_num];
+                            $overall_count++;
+
+                            // Save every 20 records so we don't lose all data if something goes wrong with the save
+                            if (($overall_count%20) == 0) {
+                                $module->emDebug("Number of appointment records to update: " . count($update_visits) . ", with running total of " . $overall_count);
+                                $return = REDCap::saveData('json', json_encode($update_visits, true));
+                                $module->emDebug("Return from appointment saveData at overall total $overall_count: " . json_encode($return));
+                                $update_visits = array();
+                            }
                         }
                     }
                 }
