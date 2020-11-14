@@ -88,9 +88,19 @@ $event_list = REDCap::getEventNames(true, false);
 if ($pid == $genpop_pid) {
     $screening_event = array_shift($event_list);
 }
-$events = array_values($event_list);
-$event_ids = array_keys($event_list);
-$module->emDebug("These are the events only: " . json_encode($events));
+
+$events = array();
+$event_ids = array();
+foreach($event_list as $event_id => $event_name){
+    $fields = REDCap::getValidFieldsByEvents($pid, $event_id);
+    if (in_array('lra_date_scheduled', $fields)) {
+        $events[] = $event_name;
+        $event_ids[] = $event_id;
+    }
+}
+
+$module->emDebug("Event names: " . json_encode($events));
+$module->emDebug("Event id: " . json_encode($event_ids));
 
 // Read in appointment file
 $appointment_data = readAppointmentData($filename);
@@ -152,7 +162,7 @@ foreach($records as $record => $list) {
                         } else if (strpos($appt_visit, 'BONUS4') !== false) {
                             $visit_num = 14;
                         } else {
-                            $module->emDebug("*** NOT FOUND: This is the orig note: $orig_appt_note, appt visit number: " . $appt_visit);
+                            //$module->emDebug("*** NOT FOUND: This is the orig note: $orig_appt_note, appt visit number: " . $appt_visit);
                             $visit_num = null;
                         }
                     } else {
@@ -173,7 +183,7 @@ foreach($records as $record => $list) {
                 if (!empty($record_mrns[$mrn])) {
 
                     // If we already have a date for this record/event, don't try to save it again
-                    if (empty($found_events[$mrn]) or (!in_array($events[$visit_num], $found_events[$mrn]))) {
+                    if (empty($found_events[$mrn]) or (($events[$visit_num] != '') and !in_array($events[$visit_num], $found_events[$mrn]))) {
                         $new_appt_date = date("Y-m-d H:i:s", strtotime($appointment_date));
                         $saved_appt_date = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_date_scheduled'];
                         $saved_appt_status = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_appt_status'];;

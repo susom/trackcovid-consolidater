@@ -73,6 +73,24 @@
             "type": "text"
         },
         {
+            "key": "lower-limit",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Days to subtract for lower window</span></h6>Number of days to subtract to target window for lower limit",
+            "required": false,
+            "type": "text"
+        },
+        {
+            "key": "upper-limit",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Days to add for upper window</span></h6>Number of days to add to target window for upper limit",
+            "required": false,
+            "type": "text"
+        },
+        {
+            "key": "window-schedule",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Target windows</span></h6>JSON object of target window date for each event",
+            "required": false,
+            "type": "text"
+        },
+        {
             "key": "stanford-birth-date",
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>Stanford Birth date field</span></h6>Field which stores the Stanford birthdate",
             "required": true,

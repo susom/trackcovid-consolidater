@@ -94,7 +94,10 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         // Loop over this row and retrieve the column data that we need
         $reordered_row = array();
+        $keep = true;
+        $cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
         foreach($this->db_result_header_order as $column => $value) {
+
             if (is_null($value)) {
                 $reordered_row[] = '';
             } else {
@@ -102,16 +105,21 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                     $found_value = date("Y-m-d", strtotime($row[$value]));
                 } else if (($column == 'SPEC_TAKEN_INSTANT') or ($column == 'RESULT_INSTANT')) {
                     $found_value = date("Y-m-d H:i:s", strtotime($row[$value]));
+                    if ($found_value < $cutoff_date) {
+                        $keep = false;
+                    }
                 } else {
                     $found_value = $row[$value];
                 }
+
                 $reordered_row[] = $found_value;
-                //$this->emDebug("Column $column, value $value, row data $row[$value], converted value $found_value");
 
             }
         }
 
-        array_push($sql_value_array, '("'. implode('","', $reordered_row) . '")');
+        if ($keep) {
+            array_push($sql_value_array, '("' . implode('","', $reordered_row) . '")');
+        }
 
         return $sql_value_array;
     }
@@ -190,7 +198,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be written
         // to the temporary directory in REDCap.
         // **** Switch this when not debugging ****//
-        //$filename = APP_PATH_TEMP . 'Stanford_10142020.csv';
+        //$filename = APP_PATH_TEMP . 'Stanford_11122020.csv';
         $filename = $this->getStanfordTrackCovidResults($irb_pid);
 
         if ($filename == false) {
@@ -208,7 +216,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $status = $this->processAllProjects();
 
             // Delete the file after the lab results were loaded
-            $this->discardCSV($filename);
+            //$this->discardCSV($filename);
         }
 
         return $status;
@@ -347,7 +355,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         try {
             $RSL = \ExternalModules\ExternalModules::getModuleInstance('redcap_to_starr_link');
             $filename = $RSL->getStanfordTrackCovidAppts($irb_pid);
-            //$filename = APP_PATH_TEMP . 'StanfordAppt_10142020.csv';
+            //$filename = APP_PATH_TEMP . 'StanfordAppts_11102020.csv';
             if ($filename == false) {
                 $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
             } else {

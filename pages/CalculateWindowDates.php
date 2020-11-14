@@ -55,6 +55,15 @@ if ($action == "calc") {
     $module->emDebug("This is the count of the wk2 records: " . count($wk2_dates));
     $wk2_event_id = REDCap::getEventIdFromUniqueEvent($wk2_event_name);
 
+    $lower = -$module->getProjectSetting("lower-limit");
+    $upper = $module->getProjectSetting("upper-limit");
+    $schedule_json = $module->getProjectSetting("window-schedule");
+    $followup_days = json_decode($schedule_json);
+    $module->emDebug("Lower Limit: " . $lower . ", Upper Limit: " . $upper . ", json schedule: " . $schedule_json);
+    foreach($followup_days as $ndays => $event) {
+        $module->emDebug("Ndays: $ndays and event name: $event");
+    }
+
     // Loop over all records to set visit windows
     $save_data = '';
     foreach ($records as $record) {
@@ -77,7 +86,7 @@ if ($action == "calc") {
 
         // If we found a date to use as baseline, calculate the visit windows
         if (!is_null($use_date) and (is_null($skip_records) or !in_array($record_id, $skip_records))) {
-            $this_record = calculateWindowLimits($record_id, $use_date, $wk2_dates, $wk2_event_id);
+            $this_record = calculateWindowLimits($record_id, $use_date, $wk2_dates, $wk2_event_id, $lower, $upper, $followup_days);
 
             if (($save_data != '') and ($this_record != '')) {
                 $save_data .= ',' . $this_record;
@@ -103,24 +112,10 @@ if ($action == "calc") {
     return;
 }
 
-function calculateWindowLimits($record_id, $baseline_date, $wk2_dates, $wk2_event_id) {
+function calculateWindowLimits($record_id, $baseline_date, $wk2_dates, $wk2_event_id, $lower, $upper, $followup_days) {
 
     global $module;
 
-    // Find out the lower and upper windows for each event based on baseline date
-    $lower = -7;
-    $upper = 7;
-    $followup_days = array(
-        14 => 'wk2_arm_1',
-        28 => 'wk4_arm_1',
-        42 => 'wk6_arm_1',
-        56 => 'wk8_arm_1',
-        70 => 'wk10_arm_1',
-        84 => 'wk12_arm_1',
-        112 => 'wk16_arm_1',
-        140 => 'wk20_arm_1',
-        168 => 'wk24_arm_1'
-    );
 
     $data_to_save = '';
     foreach($followup_days as $followup => $event_name) {

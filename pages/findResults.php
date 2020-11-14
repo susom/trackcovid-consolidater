@@ -6,7 +6,7 @@ use REDCap;
 
 $pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
 $org = isset($_GET['org']) && !empty($_GET['org']) ? $_GET['org'] : null;
-
+$module->emDebug("PID: " . $pid . ", and org: " . $org);
 
 // If we don't receive a project to process or an organization, we can't continue.
 if (is_null($pid)) {
@@ -81,7 +81,14 @@ if ($org == 'STANFORD') {
     $birthdate_field = $module->getProjectSetting('ucsf-birth-date');
 }
 $baseline_event = $module->getProjectSetting('baseline-event');
-$module->emDebug("This is the MRN field $mrn_field and this is the birth date field $birthdate_field");
+$module->emDebug("This is the MRN field $mrn_field and this is the birth date field $birthdate_field and baseline event $baseline_event");
+
+// Check for data in the lab data table brought over from STARR
+$status = checkForLabData();
+if (!$status) {
+    $module->emDebug("There doesn't seems to be data in the lab table");
+    return false;
+}
 
 // Clear out all the database tables before we begin so we have consistent data
 $module->truncateDb($db_phi_table);
@@ -104,6 +111,15 @@ $module->emDebug("Loaded " . count($records) . " demographics records into track
 
 // Make sure all MRNs are 8 character and lpad with '0' if not
 $status = $module->updateMRNsTo8Char($db_phi_table);
+
+// For Chart and GenPop have Arm2 for Appointments and Arm3 for Testing Sites.  We don't want those events
+// so find the events in Arm 1 and use those.
+$event_array = REDCap::getEventNames(true);
+if ($pid != $proto_pid) {
+    $delete = array_pop($event_array);
+    $delete = array_pop($event_array);
+}
+$module->emDebug("Event list: " . json_encode($event_array));
 
 /**
  * Now loop over all configs and look for lab results
@@ -129,7 +145,7 @@ foreach($configs as $fields => $list) {
     $all_return_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $loader_return_fields);
     $all_retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $autoloader_fields);
 
-    $records = getProjectRecords($all_retrieval_fields, $filter, null, $all_return_fields);
+    $records = getProjectRecords($all_retrieval_fields, $filter, $event_array, $all_return_fields, true);
 
     // Load the database with the redcap record_id/event_names
     if (empty($records)) {
@@ -163,14 +179,40 @@ foreach($configs as $fields => $list) {
     }
 }
 
+
+function checkForLabData() {
+
+    global $module;
+
+    $module->emDebug("In checkForLabData");
+    $db_table = 'track_covid_result_match';
+    $sql = 'select count(*) as num_labs from ' . $db_table;
+    $module->emDebug("This is the query: " . $sql);
+
+    // Find out howm any rows are in the table
+    $q = db_query($sql);
+    $results = db_fetch_array($q);
+    $nresult_labs = $results['num_labs'];
+    $module->emDebug("Number of results in table " . $db_table . " is " . $nresult_labs);
+
+    if ($nresult_labs > 0) {
+        return true;
+    } else {
+        return false;
+    }
+
+}
+
+
+/*
 // Whether or not the last status is good, create a record in the unmatched lab project
 $return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
 $retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
 
 // Figure out which results were not used in matching records and store them in a new project
 $status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
-                        $autoload_field_list, $org);
-
+                        $autoload_field_list, $org, $event_array);
+*/
 print $status;
 
 
@@ -225,16 +267,14 @@ function createRecordFilter($org, $org_options, $fields, $this_proj) {
 /**
  * Retrieve current project data and load into the database table so we can manipulate it
  */
-function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null) {
+function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null, $project_data=false) {
     global $module;
 
     // If the fields we are expecting in return are the same fields that we are asking for, set them to the same
     // This won't be the case when checkboxes are involved,  We will return how many options there are for each
     // checkbox.
-    $project_data = true;
     if (is_null($return_fields)) {
         $return_fields = $fields;
-        $project_data = false;
     }
 
     // These are unwanted characters that might be entered in the pcr_id, igg_id field that we want to strip out
@@ -265,15 +305,17 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
     $module->emDebug("In getProjectRecords, getData params: " . json_encode($params));
     $q = REDCap::getData($params);
 
-
     // Replace all backslashs by blanks otherwise we can't load into the database
     // Sometimes there are backslashs put in the sample id fields and we want to delete them.
     $records = json_decode($q, true);
     $module->emDebug("There were " . count($records) . " records retrieved from getData");
 
+
+    $cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
     $data_to_save = array();
     foreach($records as $record) {
         $one_record = array();
+        $keep = true;
         foreach($return_fields as $field => $value) {
 
             if ($project_data) {
@@ -298,6 +340,14 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
                     }
                 } else if (($field == 4) or ($field == 5)) {
                     $one_record[] = str_replace($unwanted, $replace_unwanted, $record[$value]);
+                } else if ($field == 7) {
+                    if (!empty($record[$value])) {
+                        $date_of_loaded_sample = date('Y-m-d', strtotime($record[$value]));
+                        if (!empty($date_of_loaded_sample) and ($date_of_loaded_sample < $cutoff_date)) {
+                            $keep = false;
+                        }
+                    }
+                    $one_record[] = $record[$value];
                 } else {
                     $one_record[] = trim($record[$value]);
                 }
@@ -306,7 +356,9 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
             }
         }
 
-        array_push($data_to_save, '("' . implode('","', $one_record) . '")');
+        if ($keep) {
+            array_push($data_to_save, '("' . implode('","', $one_record) . '")');
+        }
     }
 
     return $data_to_save;
@@ -620,7 +672,7 @@ function saveResults($data_to_save) {
  *      4) How many total cumulative positives (AB and PCR) and how many incremental positives are there?
  */
 function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
-                       $autoload_field_list, $org) {
+                       $autoload_field_list, $org, $event_list) {
 
     global $module;
     $status = true;
@@ -631,6 +683,7 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
     $filter = "[lra_pcr_result] <> '' or [lra_ab_result] <> ''";
     $params = array(
         'return_format' => 'json',
+        'events'        => $event_list,
         'fields'        => $retrieval_fields,
         'filterLogic'   => $filter
     );
@@ -668,10 +721,11 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
     if (!status) {
         $module->emDebug("Error when pushing data to table $results_table for project $project");
         return false;
+    } else {
+        // If the data was successfully saved in the db table, keep processing
+        $status_dontcare = unmatchedLabResults($project, $dag_name, $org);
+        $status_dontcare = unmatchedMRNs($project, $dag_name, $org);
     }
-
-    $status_dontcare = unmatchedLabResults($project, $dag_name, $org);
-    $status_dontcare = unmatchedMRNs($project, $dag_name, $org);
 
     return $status;
 }
