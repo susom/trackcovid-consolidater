@@ -180,6 +180,17 @@ foreach($configs as $fields => $list) {
 }
 
 
+// Whether or not the last status is good, create a record in the unmatched lab project
+$return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
+$retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
+
+// Figure out which results were not used in matching records and store them in a new project
+$status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
+    $autoload_field_list, $org, $event_array);
+
+print $status;
+
+
 function checkForLabData() {
 
     global $module;
@@ -202,17 +213,6 @@ function checkForLabData() {
     }
 
 }
-
-
-// Whether or not the last status is good, create a record in the unmatched lab project
-$return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
-$retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
-
-// Figure out which results were not used in matching records and store them in a new project
-$status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
-                        $autoload_field_list, $org, $event_array);
-
-print $status;
 
 
 /**
@@ -562,7 +562,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
     $sql = 'insert into track_covid_found_results (record_id, redcap_event_name) ' .
                 ' select record_id, redcap_event_name from track_covid_project_records ';
     $q = db_query($sql);
-    $num_rows = db_num_rows($q);
+    $num_rows = db_affected_rows($q);
     $module->emDebug("Inserted rows into track_covid_found_results: " . $num_rows);
 
     if (!empty($all_pcr_results)) {
@@ -590,7 +590,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
             ' fr.lra_pcr_match_methods___4 = temp.lra_pcr_match_methods___4, ' .
             ' fr.lra_pcr_match_methods___5 = temp.lra_pcr_match_methods___5 ';
         $q = db_query($sql);
-        $num_rows = db_num_rows($q);
+        $num_rows = db_affected_rows($q);
         $module->emDebug("Merged PCR data into track_covid_found_results: " . $num_rows);
     }
 
@@ -619,7 +619,7 @@ function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $p
             ' fr.lra_ab_match_methods___4 = temp.lra_ab_match_methods___4, ' .
             ' fr.lra_ab_match_methods___5 = temp.lra_ab_match_methods___5 ';
         $q = db_query($sql);
-        $num_rows = db_num_rows($q);
+        $num_rows = db_affected_rows($q);
         $module->emDebug("Merged rows of IGG into track_covid_found_results: " . $num_rows);
     }
 
@@ -675,6 +675,8 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
 
     global $module;
     $status = true;
+    $cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+    $module->emDebug("Cutoff date: " . $cutoff_date);
 
     // Retrieve the final list of autoloaded results so we can compare against the results in the file
     // and see which results are leftover results
@@ -690,12 +692,20 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
     $q = REDCap::getData($params);
     $records = json_decode($q, true);
 
+    $ndata = 0;
+    $keep = true;
     $data_to_save = array();
     foreach($records as $record) {
         $one_record = array();
         $one_record[] = $record['record_id'];
         $one_record[] = $record['redcap_event_name'];
         $one_record[] = $record['lra_pcr_result'];
+        if ($record['lra_pcr_date'] != '') {
+            $date_of_loaded_sample = date('Y-m-d', strtotime($record['lra_pcr_date']));
+            if (!empty($date_of_loaded_sample) and ($date_of_loaded_sample < $cutoff_date)) {
+                $keep = false;
+            }
+        }
         $one_record[] = $record['lra_pcr_date'];
         $one_record[] = $record['lra_pcr_assay_method'];
         $one_record[] = $record['lra_pcr_match_methods___1'];
@@ -704,6 +714,12 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
         $one_record[] = $record['lra_pcr_match_methods___4'];
         $one_record[] = $record['lra_pcr_match_methods___5'];
         $one_record[] = $record['lra_ab_result'];
+        if ($record['lra_ab_date'] != '') {
+            $date_of_loaded_sample = date('Y-m-d', strtotime($record['lra_ab_date']));
+            if (!empty($date_of_loaded_sample) and ($date_of_loaded_sample < $cutoff_date)) {
+                $keep = false;
+            }
+        }
         $one_record[] = $record['lra_ab_date'];
         $one_record[] = $record['lra_ab_assay_method'];
         $one_record[] = $record['lra_ab_match_methods___1'];
@@ -711,13 +727,19 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
         $one_record[] = $record['lra_ab_match_methods___3'];
         $one_record[] = $record['lra_ab_match_methods___4'];
         $one_record[] = $record['lra_ab_match_methods___5'];
-        array_push($data_to_save, '("' . implode('","', $one_record) . '")');
+
+        // If this record is more recent than the cutoff date, save it in the DB
+        if ($keep) {
+            array_push($data_to_save, '("' . implode('","', $one_record) . '")');
+        }
+        $ndata++;
+        $keep = true;
     }
 
     // Push the current project's data into the results table
     $headers = "record_id,redcap_event_name," . $autoload_field_list;
     $status = $module->pushDataIntoDB($results_table, $headers, $data_to_save);
-    if (!status) {
+    if (!$status) {
         $module->emDebug("Error when pushing data to table $results_table for project $project");
         return false;
     } else {
