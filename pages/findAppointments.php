@@ -72,7 +72,7 @@ if (empty($records)) {
 // Retrieve in array format so we can compare to see if the value has changed
 $params = array(
     'return_format' => 'array',
-    'fields'        => array('record_id', 'redcap_event_name', 'lra_date_scheduled', 'lra_appt_status')
+    'fields'        => array('record_id', 'redcap_event_name', 'lra_date_scheduled', 'lra_appt_status', 'lra_appt_location')
 );
 $appt_records = REDCap::getData($params);
 $module->emDebug("This is the project appointment date count: " . json_encode(count($appt_records)));
@@ -85,9 +85,7 @@ $module->emDebug("This is the project appointment date count: " . json_encode(co
 // to manually set Bonus Event 1 to be event 11, Bonus Event 2 to be 12, etc.  But Chart does use Visit 0 which
 // will correctly correspond to Baseline.
 $event_list = REDCap::getEventNames(true, false);
-if ($pid == $genpop_pid) {
-    $screening_event = array_shift($event_list);
-}
+$module->emDebug("Events: " . json_encode($event_list));
 
 $events = array();
 $event_ids = array();
@@ -101,6 +99,7 @@ foreach($event_list as $event_id => $event_name){
 
 $module->emDebug("Event names: " . json_encode($events));
 $module->emDebug("Event id: " . json_encode($event_ids));
+
 
 // Read in appointment file
 $appointment_data = readAppointmentData($filename);
@@ -133,6 +132,7 @@ foreach($records as $record => $list) {
             $orig_appt_note = $appt['appt_note'];
             $appointment_date = $appt['appt_date'];
             $appt_status = $appt['appt_status'];
+            $appt_location = $appt['appt_location'];
             $first_replace = str_replace($unwanted_chars, $replace_chars, strtoupper($orig_appt_note));
             $appt_visit = str_replace($unwanted_chars2, $replace_chars2, $first_replace);
 
@@ -187,6 +187,8 @@ foreach($records as $record => $list) {
                         $new_appt_date = date("Y-m-d H:i:s", strtotime($appointment_date));
                         $saved_appt_date = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_date_scheduled'];
                         $saved_appt_status = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_appt_status'];;
+                        $saved_appt_location = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_appt_location'];;
+
                         if ($appt_status == 'Scheduled') {
                             $new_appt_status = 1;
                         } else if ($appt_status == 'Completed') {
@@ -196,11 +198,13 @@ foreach($records as $record => $list) {
                         }
 
                         // If the new appointment date is the same as the already saved date, no need to re-save.
-                        if (($saved_appt_date != $new_appt_date) or ($saved_appt_status != $new_appt_status)) {
+                        if (($saved_appt_date != $new_appt_date) or ($saved_appt_status != $new_appt_status)
+                                    or ($saved_appt_location != $appt_location)) {
                             $one_event['record_id'] = $record_mrns[$mrn];
                             $one_event['redcap_event_name'] = $events[$visit_num];
                             $one_event['lra_date_scheduled'] = $new_appt_date;
                             $one_event['lra_appt_status'] = $new_appt_status;
+                            $one_event['lra_appt_location'] = $appt_location;
                             $update_visits[] = $one_event;
                             $found_events[$mrn][] = $events[$visit_num];
                             $overall_count++;
@@ -235,13 +239,14 @@ function readAppointmentData($filename) {
     global $module;
 
     // Read in the appointment file which is in csv format. The header for the file is:
-    //          mrn, appt_when, appt_status, visit_type, appt_note, rank_order
+    //          mrn, appt_when, appt_status, visit_type, appt_note, appt_location, rank_order
     // We are going to rearrange the data to make the matching easier.  We are putting the data in
     // the following format:
     //      "mrn" =>  array(
     //                      "appt_note"     => "note",
     //                      "appt_date"     => "date,
     //                      "appt_status"   => "status"
+    //                      "appt_location  => "location"
     //                  );
     $row_number = 1;
     $appointment_data = array();
@@ -253,9 +258,10 @@ function readAppointmentData($filename) {
                 $row_number++;
             } else {
                  $appointment_data["$data[0]"][] =
-                    array("appt_note" => $data[4],
-                        "appt_date" => $data[1],
-                        "appt_status" => $data[2]
+                    array("appt_note"       => $data[4],
+                        "appt_date"         => $data[1],
+                        "appt_status"       => $data[2],
+                        "appt_location"     => $data[5]
                     );
             }
         }
