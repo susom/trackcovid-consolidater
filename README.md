@@ -14,7 +14,10 @@ The link connects to a webpage where the user can select a file located on their
 and sends the data to the Redcap server which will create a file in the Redcap temp directory. Once
 the file is created, the loader will match and upload the lab results to the TrackCovid projects.
 
-Stanford appointment data is also brought over from STARR and loaded into the TrackCovid projects.
+Stanford appointment data is also brought over from STARR and loaded into the TrackCovid projects. Stanford
+appointment data is queried from the HL7 tables so the data is more up-to-date.
+
+The appointment and lab data brought over from STARR are now filtered to the last 6 weeks.
 
 # System Setup
 
