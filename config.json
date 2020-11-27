@@ -173,6 +173,12 @@
             "type": "project-id"
         },
         {
+            "key": "scheduler-pid",
+            "name": "<b>PID of the Scheduler project</b><br>Redcap Scheduler Project",
+            "required": true,
+            "type": "project-id"
+        },
+        {
             "key": "allowed-users-for-loader",
             "name": "<b>Users allowed to run loader</b><br>Comma-separated list of sunet IDs who are allowed to run the UCSF loader.",
             "required": true,
