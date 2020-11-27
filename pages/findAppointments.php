@@ -104,12 +104,11 @@ if (empty($appointment_file_data)) {
 
 // Add these appointments to the scheduler date/time so this timeslot does not get overbooked
 // This only has to happen once for each data file so only perform if this is Chart
-/*
+
 if ($pid == $chart_pid) {
     $slots = retrieveTestingSlots($scheduler_pid, $slots_event_name);
     addToScheduler($appointment_file_data, $slots, $scheduler_pid);
 }
-*/
 
 /**
  * Now loop over all participants to find their appointments.
