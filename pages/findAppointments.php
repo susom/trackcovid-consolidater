@@ -166,6 +166,7 @@ foreach($record_mrns as $mrn => $record) {
                                 $one_event['record_id'] = $record_mrns[$mrn];
                                 $one_event['redcap_event_name'] = $events[$visit_num];
                                 $one_event['reservation_datetime'] = $new_appt_datetime;
+                                $one_event['reservation_slot_id'] = '';
                                 $one_event['reservation_date'] = $new_appt_date;
                                 $one_event['reservation_participant_location'] = $new_appt_location;
                                 $one_event['reservation_created_at'] = $appt_update_datetime;
