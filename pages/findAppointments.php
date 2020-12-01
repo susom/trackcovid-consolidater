@@ -159,10 +159,13 @@ foreach($record_mrns as $mrn => $record) {
                             $new_appt_date = date("Y-m-d", strtotime($appointment_date));
                             $saved_appt_datetime = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_datetime'];
                             $saved_appt_location = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_participant_location'];;
+                            $saved_appt_slot_id = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_slot_id'];;
                             $new_appt_location = retrieveSchedulerLocationNumber($appt_location);
 
                             // If the new appointment date is the same as the already saved date, no need to re-save.
-                            if (($saved_appt_datetime != $new_appt_datetime) or ($saved_appt_location != $new_appt_location)) {
+                            if (($saved_appt_datetime != $new_appt_datetime) or ($saved_appt_location != $new_appt_location)
+                                or (!empty($saved_appt_slot_id)))
+                            {
                                 $one_event['record_id'] = $record_mrns[$mrn];
                                 $one_event['redcap_event_name'] = $events[$visit_num];
                                 $one_event['reservation_datetime'] = $new_appt_datetime;
@@ -177,7 +180,7 @@ foreach($record_mrns as $mrn => $record) {
                                 // Save every 20 records so we don't lose all data if something goes wrong with the save
                                 if (($overall_count % 10) == 0) {
                                     $module->emDebug("Number of appointment records to update: " . count($update_visits) . ", with running total of " . $overall_count);
-                                    $return = REDCap::saveData('json', json_encode($update_visits));
+                                    $return = REDCap::saveData('json', json_encode($update_visits), 'overwrite');
                                     $module->emDebug("Return from appointment saveData at overall total $overall_count: " . json_encode($return));
                                     $update_visits = array();
                                 }
@@ -192,7 +195,7 @@ foreach($record_mrns as $mrn => $record) {
 
 if (!empty($update_visits)) {
     $module->emDebug("Number of appointment records to update: " . count($update_visits));
-    $return = REDCap::saveData('json', json_encode($update_visits));
+    $return = REDCap::saveData('json', json_encode($update_visits), 'overwrite');
     $module->emDebug("Return from appointment saveData: " . json_encode($return));
 }
 
@@ -250,7 +253,7 @@ function addToScheduler($appts, $slots, $scheduler_pid) {
     // Save this data to the Shared Scheduler to the Slots Form
     if (!empty($update_all_slots)) {
         $module->emDebug("Number of external appts for the Shared Scheduler: " . count($update_all_slots));
-        $return = REDCap::saveData($scheduler_pid, 'json', json_encode($update_all_slots));
+        $return = REDCap::saveData($scheduler_pid, 'json', json_encode($update_all_slots), 'overwrite');
         $module->emDebug("Return from Shared Scheduler saveData: " . json_encode($return));
     }
 
@@ -493,7 +496,7 @@ function retrieveApptRecords() {
     $params = array(
         'return_format' => 'array',
         'fields'        => array('record_id', 'redcap_event_name', 'reservation_participant_location', 'reservation_datetime',
-                                'reservation_date', 'reservation_created_at')
+                                'reservation_date', 'reservation_created_at', 'reservation_slot_id')
     );
     $appt_records = REDCap::getData($params);
     $module->emDebug("This is the project appointment date count: " . count($appt_records));
