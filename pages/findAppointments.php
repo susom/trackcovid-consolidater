@@ -85,7 +85,7 @@ if (empty($record_mrns)) {
 }
 
 // Retrieve appointment records in Redcap
-$appt_records = retrieveApptRecords();
+$appt_records = retrieveApptRecords($events, $record_mrns);
 if (empty($appt_records)) {
     $module->emDebug("There are no appointment records in Redcap project " . $pid . ". Skipping processing");
     return true;
@@ -364,7 +364,6 @@ function readAppointmentData($filename) {
     //                  );
     $row_number = 1;
     $appointment_data = array();
-    $module->emDebug("File: " . $filename);
     if (($handle = fopen($filename, "r")) !== FALSE) {
         while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
             if ($row_number == 1) {
@@ -477,6 +476,7 @@ function retrieveMRNs($mrn_field, $baseline_event_id) {
         'filterLogic'   => "[". $mrn_field . "] <> ''",
         'events'        => $baseline_event_id
     );
+
     $records = REDCap::getData($params);
     $record_mrns = array();
     foreach($records as $record_id => $info) {
@@ -487,16 +487,21 @@ function retrieveMRNs($mrn_field, $baseline_event_id) {
     return $record_mrns;
 }
 
-function retrieveApptRecords() {
+function retrieveApptRecords($event_list, $mrns_list) {
 
     global $module;
+
+    // List of records
+    $record_list = array_values($mrns_list);
 
     // Retrieve the list of appointments from the Redcap project in all events.
     // Retrieve in array format so we can compare to see if the value has changed
     $params = array(
-        'return_format' => 'array',
-        'fields'        => array('record_id', 'redcap_event_name', 'reservation_participant_location', 'reservation_datetime',
-                                'reservation_date', 'reservation_created_at', 'reservation_slot_id')
+            'return_format' => 'array',
+            'records'       => $record_list,
+            'fields'        => array('record_id', 'redcap_event_name', 'reservation_participant_location', 'reservation_datetime',
+                                    'reservation_date', 'reservation_created_at', 'reservation_slot_id'),
+            'events'        => $event_list
     );
     $appt_records = REDCap::getData($params);
     $module->emDebug("This is the project appointment date count: " . count($appt_records));
