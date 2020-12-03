@@ -95,7 +95,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         // Loop over this row and retrieve the column data that we need
         $reordered_row = array();
         $keep = true;
-        $cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+        //$cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+        $cutoff_date = date('Y-m-d', strtotime("-6 months"));
         foreach($this->db_result_header_order as $column => $value) {
 
             if (is_null($value)) {
@@ -138,26 +139,63 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
 	    $status = false;
 
-        try {
-            $header_array = explode(',',$headers);
+        $header_array = explode(',',$headers);
+	    $subarray = array();
+	    $ncnt = 0;
 
-            // Insert the data into the whichever database table is specified
-            if ($db_table == $this->db_results_table) {
-                $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $data_array) .
-                    " ON DUPLICATE KEY UPDATE " . $header_array[0] . '=' . $header_array[0];
-            } else {
-                $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $data_array);
+        foreach ($data_array as $one_row) {
+            $subarray[] = $one_row;
+
+            // Save every 1000 records
+            if (($ncnt % 1000) == 0) {
+                try {
+                    // Insert the data into the whichever database table is specified
+                    if ($db_table == $this->db_results_table) {
+                        $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $subarray) .
+                            " ON DUPLICATE KEY UPDATE " . $header_array[0] . '=' . $header_array[0];
+                    } else {
+                        $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $subarray);
+                    }
+
+                    $q = $this->query($sql, array());
+                    $this->emDebug("Finished inserting into ". count($subarray) . " database ($db_table) with status $q with running total of $ncnt");
+
+                    $subarray = array();
+                    $status = true;
+
+                } catch (\Exception $e) {
+                    $msg = $e->getMessage();
+                    $this->emError("Exception thrown while loading database $db_table: " . $msg);
+                    $status = false;
+                    return $status;
+                }
+
             }
-            //$this->emDebug("This is the sql: " . $sql);
+            $ncnt++;
+        }
 
-            $q = $this->query($sql, array());
-            $this->emDebug("Finished inserting into database ($db_table) with status $q");
+        // If there are unsaved records, save them now
+        if (!empty($subarray)) {
+            try {
+                // Insert the data into the whichever database table is specified
+                if ($db_table == $this->db_results_table) {
+                    $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $subarray) .
+                        " ON DUPLICATE KEY UPDATE " . $header_array[0] . '=' . $header_array[0];
+                } else {
+                    $sql = "INSERT INTO " . $db_table . " (" . $headers . ") VALUES " . implode(',', $subarray);
+                }
 
-            $status = true;
+                $q = $this->query($sql, array());
+                $this->emDebug("Finished inserting final ". count($subarray) . " into database ($db_table) with status $q with running total of $ncnt");
 
-        } catch (\Exception $e) {
-            $msg = $e->getMessage();
-            $this->emError("Exception thrown while loading database $db_table: " . $msg);
+                $status = true;
+
+            } catch (\Exception $e) {
+                $msg = $e->getMessage();
+                $this->emError("Exception thrown while loading database $db_table: " . $msg);
+                $status = false;
+                return $status;
+            }
         }
 
         return $status;
@@ -198,7 +236,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be written
         // to the temporary directory in REDCap.
         // **** Switch this when not debugging ****//
-        //$filename = APP_PATH_TEMP . 'Stanford_11162020.csv';
+        //$filename = APP_PATH_TEMP . 'Stanford_12032020.csv';
         $filename = $this->getStanfordTrackCovidResults($irb_pid);
 
         if ($filename == false) {
@@ -241,7 +279,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             // Create the API URL to this project.
             $this_url = $this->getUrl('pages/findResults.php?pid=' . $pid, true, true) .
                 '&org=' . $this->institution;
-            $this->emDebug("Calling cron ProcessCron for project $pid at URL " . $this_url);
+            $this->emDebug("Calling findResults for project $pid at URL " . $this_url);
 
             // Go into project context and process data for this project
             $status = http_get($this_url);
@@ -355,7 +393,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         try {
             $RSL = \ExternalModules\ExternalModules::getModuleInstance('redcap_to_starr_link');
             $filename = $RSL->getStanfordTrackCovidAppts($irb_pid);
-            //$filename = APP_PATH_TEMP . 'StanfordAppts_11102020.csv';
+            //$filename = APP_PATH_TEMP . 'StanfordAppts_11282020.csv';
             if ($filename == false) {
                 $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
             } else {

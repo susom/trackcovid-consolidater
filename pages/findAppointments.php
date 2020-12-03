@@ -246,8 +246,17 @@ function addToScheduler($appts, $slots, $scheduler_pid) {
     }
 
     $update_all_slots = array();
+    $ncnt = 0;
     foreach($update_slots as $id => $each_slot) {
         $update_all_slots[] = $each_slot;
+
+        if (($ncnt % 20) == 0) {
+            $module->emDebug("Saving 20 appointment slots out of $ncnt");
+            $return = REDCap::saveData($scheduler_pid, 'json', json_encode($update_all_slots), 'overwrite');
+            $module->emDebug("Return from Shared Scheduler saveData: " . json_encode($return));
+            $update_all_slots = array();
+        }
+        $ncnt++;
     }
 
     // Save this data to the Shared Scheduler to the Slots Form

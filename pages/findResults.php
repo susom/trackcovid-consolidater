@@ -22,7 +22,7 @@ if (is_null($pid)) {
 $LOCATIONS = array(
     'CHART'             => array(1,2),
     'TRACK PROTO'       => array(1),
-    'TRACK REP'         => array(4,7,8,9,10)
+    'TRACK REP'         => array(4,7,8,9,10,11,12,13,14)
 );
 
 // Since we are doing bulk loading, we need to know where we are loading the data to.
@@ -129,7 +129,6 @@ $baseline_event_name = $event_array[$baseline_event];
 // Retrieve configs and see how many different sets of lab results we need to find.
 $configs = $module->getSubSettings('lab-fields');
 
-
 // Process each config retrieving these fields from the REDCap project and looking for results in the database
 // The field order is:  0) date_of_visit, 1) location_collected, 2) pcr_id, 3) igg_id
 foreach($configs as $fields => $list) {
@@ -142,6 +141,7 @@ foreach($configs as $fields => $list) {
     $loader_return_fields = explode(',',$autoload_field_list);
     $all_return_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $loader_return_fields);
     $all_retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $field_array, $autoloader_fields);
+
 
     // The number of record/events is getting so big, the data is not loading in the database
     // Loop over each event and reconcile the data separately
@@ -182,6 +182,7 @@ foreach($configs as $fields => $list) {
             }
         }
     }
+
 }
 
 
@@ -316,7 +317,9 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
     $module->emDebug("There were " . count($records) . " records retrieved from getData for event $event_id");
 
 
-    $cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+    //$cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+    $cutoff_date = date('Y-m-d', strtotime("-6 months"));
+
     $data_to_save = array();
     foreach($records as $record) {
         $one_record = array();
@@ -412,7 +415,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
                 ' on mrn.record_id = pr.record_id and rm.mpi_id = pr.pcr_id ' .
         ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
         ' and rm.COMPONENT_ABBR = "PCR" ' ;
-    $module->emDebug("PCR MRN/MPI_ID query: " . $sql);
+    //$module->emDebug("PCR MRN/MPI_ID query: " . $sql);
 
     $q = db_query($sql);
     while ($results = db_fetch_assoc($q)) {
@@ -444,7 +447,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     ' and ((rm.mpi_id like "E%" and rm.mpi_id = pr.igg_id) or (substr(rm.mpi_id, 1,8) = pr.igg_id)) ' .
         ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
         ' and rm.COMPONENT_ABBR = "IGG"';
-    $module->emDebug("IGG MRN/MPI_ID query : " . $sql);
+    //$module->emDebug("IGG MRN/MPI_ID query : " . $sql);
 
     $q = db_query($sql);
     while ($results = db_fetch_assoc($q)) {
@@ -483,7 +486,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     if ($org == 'UCSF') {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
-    $module->emDebug("PCR results on MRN/DOB/Encounter Date query: " . $sql);
+    //$module->emDebug("PCR results on MRN/DOB/Encounter Date query: " . $sql);
 
     $q = db_query($sql);
     while ($results = db_fetch_assoc($q)) {
@@ -518,8 +521,7 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     if ($org == 'UCSF') {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
-
-    $module->emDebug("MRN/DOB/Contact Date for IgG query: " . $sql);
+    //$module->emDebug("MRN/DOB/Contact Date for IgG query: " . $sql);
 
     $q = db_query($sql);
     while ($results = db_fetch_assoc($q)) {
@@ -682,7 +684,8 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
     global $module;
 
     $status = true;
-    $cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+    //$cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+    $cutoff_date = date('Y-m-d', strtotime("-6 months"));
     $module->emDebug("Cutoff date: " . $cutoff_date);
 
     // Make an array of records that belong to this organization
@@ -765,9 +768,9 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
             if (($ndata%1000) == 0) {
                 $status = $module->pushDataIntoDB($results_table, $headers, $data_to_save);
                 if ($status) {
-                    $module->emDebug("Pushed 1000 out of $ndata records from reportChanges into dB");
+                    $module->emDebug("Pushed ". count($data_to_save) . " out of $ndata records from reportChanges into dB");
                 } else {
-                    $module->emDebug("Error pushing 1000 out of $ndata into DB");
+                    $module->emDebug("Error pushing " . count($data_to_save) . " out of $ndata into DB");
                 }
                 $data_to_save = array();
             }
@@ -776,7 +779,6 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
         // Reset keep
         $keep = true;
     }
-
 
     // Push the current project's data into the results table
     if (!empty($data_to_save)) {
