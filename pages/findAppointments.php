@@ -158,13 +158,14 @@ foreach($record_mrns as $mrn => $record) {
                             $new_appt_datetime = date("Y-m-d H:i:s", strtotime($appointment_date));
                             $new_appt_date = date("Y-m-d", strtotime($appointment_date));
                             $saved_appt_datetime = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_datetime'];
-                            $saved_appt_location = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_participant_location'];;
-                            $saved_appt_slot_id = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_slot_id'];;
+                            $saved_appt_location = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_participant_location'];
+                            $saved_appt_slot_id = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_slot_id'];
+                            $loader_appt_datetime = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_date_scheduled'];
                             $new_appt_location = retrieveSchedulerLocationNumber($appt_location);
 
                             // If the new appointment date is the same as the already saved date, no need to re-save.
                             if (($saved_appt_datetime != $new_appt_datetime) or ($saved_appt_location != $new_appt_location)
-                                or (!empty($saved_appt_slot_id)))
+                                or (!empty($saved_appt_slot_id)) or ($loader_appt_datetime != $saved_appt_datetime))
                             {
                                 $one_event['record_id'] = $record_mrns[$mrn];
                                 $one_event['redcap_event_name'] = $events[$visit_num];
@@ -173,6 +174,7 @@ foreach($record_mrns as $mrn => $record) {
                                 $one_event['reservation_date'] = $new_appt_date;
                                 $one_event['reservation_participant_location'] = $new_appt_location;
                                 $one_event['reservation_created_at'] = $appt_update_datetime;
+                                $one_event['lra_date_scheduled']  = $new_appt_datetime;
                                 $update_visits[] = $one_event;
                                 $found_events[$mrn][] = $events[$visit_num];
                                 $overall_count++;
@@ -509,7 +511,7 @@ function retrieveApptRecords($event_list, $mrns_list) {
             'return_format' => 'array',
             'records'       => $record_list,
             'fields'        => array('record_id', 'redcap_event_name', 'reservation_participant_location', 'reservation_datetime',
-                                    'reservation_date', 'reservation_created_at', 'reservation_slot_id'),
+                                    'reservation_date', 'reservation_created_at', 'reservation_slot_id', 'lra_date_scheduled'),
             'events'        => $event_list
     );
     $appt_records = REDCap::getData($params);
