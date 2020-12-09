@@ -123,6 +123,10 @@ $replace_chars = array('', '', '', '', '', '', '', '', '', '', '', '', '');
 $unwanted_chars2 = array('XTRACK', 'VISI', 'APPOINTMENT', 'WEEK', ',', 'VIISIT', 'CXHART', 'VIUSIT', 'CHART', 'TRACK2', 'TRACK');
 $replace_chars2 = array('', '', '', '', '', '', '', '', '', '', '');
 
+$unwanted_chars3 = array('V');
+$replace_chars3 = array('');
+
+
 $update_visits = array();
 $found_events = array();
 $overall_count = 0;
@@ -139,7 +143,8 @@ foreach($record_mrns as $mrn => $record) {
             $appt_status = $appt['appt_status'];
             $appt_update_datetime = $appt['appt_update_time'];
             $first_replace = str_replace($unwanted_chars, $replace_chars, strtoupper($orig_appt_note));
-            $appt_visit = str_replace($unwanted_chars2, $replace_chars2, $first_replace);
+            $second_replace = str_replace($unwanted_chars2, $replace_chars2, $first_replace);
+            $appt_visit = str_replace($unwanted_chars3, $replace_chars3, $second_replace);
 
             if ($appt_status != 'Canceled') {
 
@@ -301,6 +306,9 @@ function retrieveSchedulerLocationNumber($appt_locn) {
             break;
         case 'TENT 4':
             $visit_location_number = 8;
+            break;
+        case 'COMPRECARE HEALTH CENTER - SAN JOSE':
+            $visit_location_number = 14;
             break;
         default:
             if (trim($appt_locn) != 'COVID CTRU 300P') {

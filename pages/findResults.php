@@ -119,8 +119,13 @@ if ($pid != $proto_pid) {
     $delete = array_pop($event_array);
     $delete = array_pop($event_array);
 }
-$module->emDebug("Event list: " . json_encode($event_array));
-$baseline_event_name = $event_array[$baseline_event];
+if ($pid == $genpop_pid) {
+    $baseline_event_name = array_shift($event_array);
+} else {
+    $baseline_event_name = $event_array[$baseline_event];
+}
+
+$module->emDebug("Event list: " . json_encode($event_array) . ", and event where mrn is $baseline_event_name");
 
 /**
  * Now loop over all configs and look for lab results
@@ -391,30 +396,21 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
 
     // First we are going to match as many records as we can on MRN/sample_id for PCR values
     $sql =
-        'select pr.record_id, pr.redcap_event_name, ' .
-            ' case rm.ORD_VALUE ' .
-            '       when "Not Detected"                 then 0 ' .
-            '       when "NOT DETECTED"                 then 0 ' .
-            '       when "COVID 19 RNA: Not detected"   then 0 ' .
-            '       when "NOT DET"                      then 0 ' .
-            '       when "Negative"                     then 0 ' .
-            '       when "Detected"                     then 1 ' .
-            '       when "DETECTED"                     then 1 ' .
-            '       else                                98' .
-            ' end as lra_pcr_result, ' .
-            ' rm.spec_taken_instant as lra_pcr_date, ' .
-            ' rm.method_desc as lra_pcr_assay_method, ' .
-            ' 1 as lra_pcr_match_methods___1, ' .
-            ' 1 as lra_pcr_match_methods___2, ' .
-            ' 0 as lra_pcr_match_methods___3, ' .
-            ' 0 as lra_pcr_match_methods___4, ' .
-            ' 0 as lra_pcr_match_methods___5 ' .
-        ' from track_covid_result_match rm join track_covid_mrn_dob mrn ' .
-                ' on rm.pat_mrn_id = mrn.mrn ' .
-            ' join track_covid_project_records pr ' .
-                ' on mrn.record_id = pr.record_id and rm.mpi_id = pr.pcr_id ' .
-        ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
-        ' and rm.COMPONENT_ABBR = "PCR" ' ;
+        "select pr.record_id, pr.redcap_event_name,
+            if (upper(ord_value) like '%NOT DE%', 0, if (upper(ord_value) like '%DET%', 1, 98)) as lra_pcr_result,
+            rm.spec_taken_instant as lra_pcr_date,
+            rm.method_desc as lra_pcr_assay_method,
+            1 as lra_pcr_match_methods___1,
+            1 as lra_pcr_match_methods___2,
+            0 as lra_pcr_match_methods___3,
+            0 as lra_pcr_match_methods___4,
+            0 as lra_pcr_match_methods___5
+        from track_covid_result_match rm join track_covid_mrn_dob mrn
+                on rm.pat_mrn_id = mrn.mrn
+                join track_covid_project_records pr
+                on mrn.record_id = pr.record_id and rm.mpi_id = pr.pcr_id
+        where (rm.mpi_id is not null and rm.mpi_id != '')
+        and rm.COMPONENT_ABBR = 'PCR'";
     //$module->emDebug("PCR MRN/MPI_ID query: " . $sql);
 
     $q = db_query($sql);
@@ -425,29 +421,22 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
 
     // Now we are going to match as many records as we can on MRN/sample_id for IgG values
     $sql =
-        'select pr.record_id, pr.redcap_event_name, ' .
-                ' case rm.ORD_VALUE ' .
-                    ' when "Negative"    then 0 ' .
-                    ' when "NEG"         then 0 ' .
-                    ' when "Positive"    then 1 ' .
-                    ' when "POS"         then 1 ' .
-                    ' else               98 ' .
-                ' end as lra_ab_result, ' .
-                ' rm.spec_taken_instant as lra_ab_date,' .
-                ' rm.method_desc as lra_ab_assay_method, ' .
-                ' 1 as lra_ab_match_methods___1, ' .
-                ' 1 as lra_ab_match_methods___2, ' .
-                ' 0 as lra_ab_match_methods___3, ' .
-                ' 0 as lra_ab_match_methods___4, ' .
-                ' 0 as lra_ab_match_methods___5 ' .
-            ' from track_covid_result_match rm join track_covid_mrn_dob mrn ' .
-                    ' on rm.pat_mrn_id = mrn.mrn ' .
-                ' join track_covid_project_records pr ' .
-                    ' on mrn.record_id = pr.record_id ' .
-    ' and ((rm.mpi_id like "E%" and rm.mpi_id = pr.igg_id) or (substr(rm.mpi_id, 1,8) = pr.igg_id)) ' .
-        ' where (rm.mpi_id is not null and rm.mpi_id != "") ' .
-        ' and rm.COMPONENT_ABBR = "IGG"';
-    //$module->emDebug("IGG MRN/MPI_ID query : " . $sql);
+        "select pr.record_id, pr.redcap_event_name,
+            if (upper(ord_value) like '%NEG%', 0, if (upper(ord_value) like '%POS%', 1, 98)) as lra_ab_result,
+                 rm.spec_taken_instant as lra_ab_date,
+                 rm.method_desc as lra_ab_assay_method,
+                 1 as lra_ab_match_methods___1,
+                 1 as lra_ab_match_methods___2,
+                 0 as lra_ab_match_methods___3,
+                 0 as lra_ab_match_methods___4,
+                 0 as lra_ab_match_methods___5
+             from track_covid_result_match rm join track_covid_mrn_dob mrn
+                     on rm.pat_mrn_id = mrn.mrn
+                 join track_covid_project_records pr
+                     on mrn.record_id = pr.record_id
+     and ((rm.mpi_id like 'E%' and rm.mpi_id = pr.igg_id) or (substr(rm.mpi_id, 1,8) = pr.igg_id))
+         where (rm.mpi_id is not null and rm.mpi_id != '')
+         and rm.COMPONENT_ABBR = 'IGG'";
 
     $q = db_query($sql);
     while ($results = db_fetch_assoc($q)) {
@@ -458,31 +447,20 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
     // Now we are going to look for matches for results that do not have a sample id and
     // we will match on MRN/DoB/Encounter Date for PCR tests
     $sql =
-        'select pr.record_id, pr.redcap_event_name, ' .
-                ' case rm.ORD_VALUE ' .
-                '      when "Not Detected"                 then 0 ' .
-                '      when "NOT DETECTED"                 then 0 ' .
-                '      when "COVID 19 RNA: Not de"         then 0 ' .
-                '      when "NOT DET"                      then 0 ' .
-                '      when "Negative"                     then 0 ' .
-                '      when "Detected"                     then 1 ' .
-                '      when "DETECTED"                     then 1 ' .
-                '      when "TEST NOT PERFORMED"           then 98 '.
-                '      else                                98 ' .
-                ' end as lra_pcr_result, ' .
-            ' rm.spec_taken_instant as lra_pcr_date, ' .
-            ' rm.method_desc as lra_ab_assay_method, ' .
-            ' 1 as lra_pcr_match_methods___1, ' .
-            ' 0 as lra_pcr_match_methods___2, ' .
-            ' 1 as lra_pcr_match_methods___3, ' .
-            ' 0 as lra_pcr_match_methods___4, ' .
-            ' 1 as lra_pcr_match_methods___5 ' .
-        ' from track_covid_result_match rm join track_covid_mrn_dob mrn ' .
-                ' on rm.pat_mrn_id = mrn.mrn and DATE(rm.birth_date) = DATE(mrn.dob) ' .
-            ' join track_covid_project_records pr on pr.record_id = mrn.record_id ' .
-        ' where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT) ' .
-        ' and rm.COMPONENT_ABBR = "PCR" ' .
-        ' and rm.birth_date is not null ' ;
+        "select pr.record_id, pr.redcap_event_name,
+                if (upper(ord_value) like '%NOT DE%', 0, if (upper(ord_value) like '%DET%', 1, 98)) as lra_pcr_result,
+            rm.spec_taken_instant as lra_pcr_date,
+            rm.method_desc as lra_ab_assay_method,
+            1 as lra_pcr_match_methods___1,
+            0 as lra_pcr_match_methods___2,
+            1 as lra_pcr_match_methods___3,
+            0 as lra_pcr_match_methods___4,
+            1 as lra_pcr_match_methods___5
+        from track_covid_result_match rm join track_covid_mrn_dob mrn
+                on rm.pat_mrn_id = mrn.mrn and DATE(rm.birth_date) = DATE(mrn.dob)
+            join track_covid_project_records pr on pr.record_id = mrn.record_id
+        where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT)
+        and rm.COMPONENT_ABBR = 'PCR'";
     if ($org == 'UCSF') {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
@@ -497,27 +475,20 @@ function matchRecords($results_table,$pcr_field_list, $ab_field_list) {
 
     // This query is for results with a sample id so we match on MRN/DoB/Encounter for IgG results
     $sql =
-        ' select pr.record_id, pr.redcap_event_name, ' .
-                ' case rm.ORD_VALUE ' .
-                    ' when "Negative"    then 0 ' .
-                    ' when "NEG"         then 0 ' .
-                    ' when "Positive"    then 1 ' .
-                    ' when "POS"         then 1 ' .
-                    ' else               98 ' .
-                ' end as lra_ab_result, ' .
-                ' rm.spec_taken_instant as lra_ab_date, ' .
-                ' rm.method_desc as lra_ab_assay_method, ' .
-                ' 1 as lra_ab_match_methods___1, ' .
-                ' 0 as lra_ab_match_methods___2, ' .
-                ' 1 as lra_ab_match_methods___3, ' .
-                ' 0 as lra_ab_match_methods___4, ' .
-                ' 1 as lra_ab_match_methods___5 ' .
-        ' from track_covid_result_match rm join track_covid_mrn_dob mrn ' .
-                    ' on rm.pat_mrn_id = mrn.mrn and DATE(rm.birth_date) = DATE(mrn.dob) ' .
-                ' join track_covid_project_records pr on pr.record_id = mrn.record_id ' .
-        ' where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT) ' .
-        ' and rm.COMPONENT_ABBR = "IGG" ' .
-        ' and rm.birth_date is not null ';
+        " select pr.record_id, pr.redcap_event_name,
+                if (upper(ord_value) like '%NEG%', 0, if (upper(ord_value) like '%POS%', 1, 98)) as lra_ab_result,
+                rm.spec_taken_instant as lra_ab_date,
+                rm.method_desc as lra_ab_assay_method,
+                1 as lra_ab_match_methods___1,
+                0 as lra_ab_match_methods___2,
+                1 as lra_ab_match_methods___3,
+                0 as lra_ab_match_methods___4,
+                1 as lra_ab_match_methods___5
+        from track_covid_result_match rm join track_covid_mrn_dob mrn
+                    on rm.pat_mrn_id = mrn.mrn and DATE(rm.birth_date) = DATE(mrn.dob)
+                join track_covid_project_records pr on pr.record_id = mrn.record_id
+        where DATE(pr.date_collected) = DATE(rm.SPEC_TAKEN_INSTANT)
+        and rm.COMPONENT_ABBR = 'IGG'";
     if ($org == 'UCSF') {
         $sql .= ' and (rm.cohort = "' . $this_proj . '")';
     }
