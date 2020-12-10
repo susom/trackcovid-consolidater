@@ -96,7 +96,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         $reordered_row = array();
         $keep = true;
         //$cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
-        $cutoff_date = date('Y-m-d', strtotime("-6 months"));
+        $cutoff_date = date('Y-m-d', strtotime("-9 months"));
         foreach($this->db_result_header_order as $column => $value) {
 
             if (is_null($value)) {
@@ -231,6 +231,9 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         // Retrieve the project ID to use to check the IRB
         $irb_pid = $this->getSystemSetting('chart-pid');
+        if (empty($irb_pid)) {
+            $irb_pid = $this->getSystemSetting('genpop-pid');
+        }
 	    $status = false;
 
 	    // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be written
@@ -393,7 +396,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         try {
             $RSL = \ExternalModules\ExternalModules::getModuleInstance('redcap_to_starr_link');
             $filename = $RSL->getStanfordTrackCovidAppts($irb_pid);
-            //$filename = APP_PATH_TEMP . 'StanfordAppts_11282020.csv';
+            //$filename = APP_PATH_TEMP . 'StanfordAppts_12072020.csv';
             if ($filename == false) {
                 $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
             } else {

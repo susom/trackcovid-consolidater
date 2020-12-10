@@ -323,7 +323,7 @@ function getProjectRecords($fields, $filter, $event_id=null, $return_fields=null
 
 
     //$cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
-    $cutoff_date = date('Y-m-d', strtotime("-6 months"));
+    $cutoff_date = date('Y-m-d', strtotime("-9 months"));
 
     $data_to_save = array();
     foreach($records as $record) {
@@ -656,7 +656,7 @@ function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
 
     $status = true;
     //$cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
-    $cutoff_date = date('Y-m-d', strtotime("-6 months"));
+    $cutoff_date = date('Y-m-d', strtotime("-9 months"));
     $module->emDebug("Cutoff date: " . $cutoff_date);
 
     // Make an array of records that belong to this organization
