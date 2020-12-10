@@ -869,17 +869,21 @@ function unmatchedLabResults($project, $dag_name, $org) {
         }
 
         // Make intermediate saves
-        if (!empty($unmatched) and (($ncnt%1000) == 0)) {
+        if (!empty($unmatched) and (($ncnt%20) == 0)) {
             $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched),
                 'normal', 'YMD', 'flat', $dag_name);
-            $module->emDebug("Return from saveData for unmatched labs: " . json_encode($return));
+            if ($ncnt % 100 == 0) {
+                $module->emDebug("Return from saveData for unmatched labs count $ncnt: " . json_encode($return));
+            }
             $unmatched = array();
         }
 
-        if (!empty($unmatched2) and (($ncnt%1000) == 0)) {
+        if (!empty($unmatched2) and (($ncnt%20) == 0)) {
             $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2),
                 'normal', 'YMD', 'flat', $dag_name);
-            $module->emDebug("Return from saveData for unmatched labs v2: " . json_encode($return));
+            if ($ncnt % 100 == 0) {
+                $module->emDebug("Return from saveData for unmatched labs v2 count $ncnt: " . json_encode($return));
+            }
             $unmatched2 = array();
         }
     }
@@ -888,13 +892,15 @@ function unmatchedLabResults($project, $dag_name, $org) {
     if (!empty($unmatched)) {
         $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched),
             'normal', 'YMD', 'flat', $dag_name);
-        $module->emDebug("Return from saveData for unmatched labs: " . json_encode($return));
     }
 
     if (!empty($unmatched2)) {
+        $module->emDebug("Return from saveData for unmatched labs: " . json_encode($return));
         $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2),
             'normal', 'YMD', 'flat', $dag_name);
-        $module->emDebug("Return from saveData unmatched labs v2: " . json_encode($return));
+        $module->emDebug("Return from saveData unmatched labs v2 for $ncnt: " . json_encode($return));
+    } else {
+        $module->emDebug("Return from saveData for unmatched labs for $ncnt: " . json_encode($return));
     }
 
     return true;
@@ -986,13 +992,13 @@ function unmatchedMRNs($project, $dag_name, $org) {
         }
 
         // Make intermediate saves
-        if (!empty($unmatched) and (($ncnt%1000) == 0)) {
+        if (!empty($unmatched) and (($ncnt%20) == 0)) {
             $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched));
             $module->emDebug("Return from saveData for no MRN unmatched labs (" . $ncnt. "): " . json_encode($return));
             $unmatched = array();
         }
 
-        if (!empty($unmatched2) and (($ncnt%1000) == 0)) {
+        if (!empty($unmatched2) and (($ncnt%20) == 0)) {
             $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2));
             $module->emDebug("Return from saveData for no MRN unmatched labs2 (" . $ncnt . "): " . json_encode($return));
             $unmatched2 = array();
