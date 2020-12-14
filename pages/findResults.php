@@ -200,6 +200,7 @@ $status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields
     $autoload_field_list, $org, $event_array, $mrn_records);
 
 print $status;
+return;
 
 function checkForLabData() {
 
@@ -631,13 +632,33 @@ function saveResults($data_to_save) {
     global $module;
 
     $status = true;
-    $return = REDCap::saveData('json', json_encode($data_to_save));
+    $save_date = array();
+    $ntotal = count($data_to_save);
+    $ncnt = 0;
+    foreach($data_to_save as $id => $info) {
+        $save_data[] = $info;
+        if (($ncnt % 20) == 0) {
+            $return = REDCap::saveData('json', json_encode($save_data));
+            if(!empty($return["errors"])){
+                $module->emDebug("Error saving lab matches " . json_encode($return["errors"]));
+                $status = false;
+            } else {
+                $module->emDebug("Successfully saved 20 out of $ntotal records: " . $return['item_count']);
+            }
 
-    if(!empty($return["errors"])){
-        $module->emDebug("Error saving lab matches " . json_encode($return["errors"]));
-        $status = false;
-    } else {
-        $module->emDebug("Successfully saved data with item count: " . $return['item_count']);
+            $save_data = array();
+        }
+        $ncnt++;
+    }
+
+    if (count($save_data) > 0) {
+        $return = REDCap::saveData('json', json_encode($save_data));
+        if(!empty($return["errors"])){
+            $module->emDebug("Error saving lab matches " . json_encode($return["errors"]));
+            $status = false;
+        } else {
+            $module->emDebug("Successfully saved rest of data with item count: " . $return['item_count']);
+        }
     }
     return $status;
 }
