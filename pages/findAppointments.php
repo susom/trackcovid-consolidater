@@ -30,12 +30,15 @@ $genpop_pid = $module->getSystemSetting('genpop-pid');
 if ($pid == $chart_pid) {
     $this_proj = "CHART";
     $dag_name = "chart";
+    $genpop = false;
 } else if ($pid == $proto_pid) {
     $this_proj = "TRACK";
     $dag_name = "proto";
+    $genpop = false;
 } else if ($pid == $genpop_pid) {
     $this_proj = "TRACK2";
     $dag_name = "genpop";
+    $genpop = true;
 } else {
     $module->emError("This is not a TrackCovid project ($pid).  Please Disable this EM on this project");
     return false;
@@ -85,7 +88,7 @@ if (empty($record_mrns)) {
 }
 
 // Retrieve appointment records in Redcap
-$appt_records = retrieveApptRecords($events, $record_mrns);
+$appt_records = retrieveApptRecords($events, $record_mrns, $genpop);
 if (empty($appt_records)) {
     $module->emDebug("There are no appointment records in Redcap project " . $pid . ". Skipping processing");
     return true;
@@ -104,7 +107,6 @@ if (empty($appointment_file_data)) {
 
 // Add these appointments to the scheduler date/time so this timeslot does not get overbooked
 // This only has to happen once for each data file so only perform if this is Chart
-
 if ($pid == $chart_pid) {
     $slots = retrieveTestingSlots($scheduler_pid, $slots_event_name);
     addToScheduler($appointment_file_data, $slots, $scheduler_pid);
@@ -117,11 +119,11 @@ if ($pid == $chart_pid) {
 // Process each patient in the list and see if they are in the appointment list
 // These are location specific.  For instance, I want to get rid of TRACK2 first before getting rid of TRACK so
 // I don't have a dangling 2 leftover.
-$unwanted_chars = array(' ', '-', 'CHARTT', 'XTRACK2', 'VISIT', 'STUDY', '#', 'VIST', 'F/U', 'VIIST', 'CHRT', 'COVID', '2GIFT');
-$replace_chars = array('', '', '', '', '', '', '', '', '', '', '', '', '');
+$unwanted_chars = array(' ', '-', 'CHARTT', 'XTRACK2', 'VISIT', 'STUDY', '#', 'VIST', 'F/U', 'VIIST', 'CHRT', 'COVID', '2GIFT', 'TRACK2');
+$replace_chars = array('', '', '', '', '', '', '', '', '', '', '', '', '', '');
 
-$unwanted_chars2 = array('XTRACK', 'VISI', 'APPOINTMENT', 'WEEK', ',', 'VIISIT', 'CXHART', 'VIUSIT', 'CHART', 'TRACK2', 'TRACK');
-$replace_chars2 = array('', '', '', '', '', '', '', '', '', '', '');
+$unwanted_chars2 = array('XTRACK', 'VISI', 'APPOINTMENT', 'WEEK', ',', 'VIISIT', 'CXHART', 'VIUSIT', 'CHART', 'TRACK');
+$replace_chars2 = array('', '', '', '', '', '', '', '', '', '');
 
 $unwanted_chars3 = array('V');
 $replace_chars3 = array('');
@@ -167,10 +169,27 @@ foreach($record_mrns as $mrn => $record) {
                             $saved_appt_slot_id = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['reservation_slot_id'];
                             $loader_appt_datetime = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['lra_date_scheduled'];
                             $new_appt_location = retrieveSchedulerLocationNumber($appt_location);
+                            $date_of_visit = $appt_records[$record_mrns[$mrn]][$event_ids[$visit_num]]['date_of_visit'];
+
+                            // If a date of visit is already filled in, don't save the appointment date since this appointment is in the past.
+                            if (($pid == $genpop_pid) and ($date_of_visit != '')) {
+                                $save = false;
+                            } else {
+                                $save = true;
+                            }
+
+                            if ($record_mrns[$mrn] == '1SC73454') {
+                                $module->emDebug("PID: $pid, GenPop pid: $genpop_pid Record: " . $record_mrns[$mrn] . " for event " . $events[$visit_num] .
+                                    " value is saved is " . $save . " record is " . json_encode($appt));
+                            }
 
                             // If the new appointment date is the same as the already saved date, no need to re-save.
-                            if (($saved_appt_datetime != $new_appt_datetime) or ($saved_appt_location != $new_appt_location)
+                            // Now we are also adding the check against date_of_visit for genpop.  If date_of_visit is not
+                            // blank, don't save the appointment because this person came in and we don't need to update
+                            // the appointment date.
+                            if ((($saved_appt_datetime != $new_appt_datetime) or ($saved_appt_location != $new_appt_location)
                                 or (!empty($saved_appt_slot_id)) or ($loader_appt_datetime != $saved_appt_datetime))
+                                        and $save)
                             {
                                 $one_event['record_id'] = $record_mrns[$mrn];
                                 $one_event['redcap_event_name'] = $events[$visit_num];
@@ -506,20 +525,31 @@ function retrieveMRNs($mrn_field, $baseline_event_id) {
     return $record_mrns;
 }
 
-function retrieveApptRecords($event_list, $mrns_list) {
+function retrieveApptRecords($event_list, $mrns_list, $genpop) {
 
     global $module;
 
     // List of records
     $record_list = array_values($mrns_list);
 
+    // List of fields
+    // This is needed because GenPop has special processing.  We will not upload any scheduled dates
+    // if 'date_of_visit' is filled in.  This is not the case for Chart.
+    $fields_list = array(
+        'record_id', 'redcap_event_name', 'reservation_participant_location', 'reservation_datetime',
+        'reservation_date', 'reservation_created_at', 'reservation_slot_id', 'lra_date_scheduled'
+    );
+    if ($genpop) {
+        array_push($fields_list, 'date_of_visit');
+    }
+    $module->emDebug("GenPop value $genpop and field list: " . json_encode($fields_list));
+
     // Retrieve the list of appointments from the Redcap project in all events.
     // Retrieve in array format so we can compare to see if the value has changed
     $params = array(
             'return_format' => 'array',
             'records'       => $record_list,
-            'fields'        => array('record_id', 'redcap_event_name', 'reservation_participant_location', 'reservation_datetime',
-                                    'reservation_date', 'reservation_created_at', 'reservation_slot_id', 'lra_date_scheduled'),
+            'fields'        => $fields_list,
             'events'        => $event_list
     );
     $appt_records = REDCap::getData($params);
