@@ -178,11 +178,6 @@ foreach($record_mrns as $mrn => $record) {
                                 $save = true;
                             }
 
-                            if ($record_mrns[$mrn] == '1SC73454') {
-                                $module->emDebug("PID: $pid, GenPop pid: $genpop_pid Record: " . $record_mrns[$mrn] . " for event " . $events[$visit_num] .
-                                    " value is saved is " . $save . " record is " . json_encode($appt));
-                            }
-
                             // If the new appointment date is the same as the already saved date, no need to re-save.
                             // Now we are also adding the check against date_of_visit for genpop.  If date_of_visit is not
                             // blank, don't save the appointment because this person came in and we don't need to update
@@ -199,6 +194,10 @@ foreach($record_mrns as $mrn => $record) {
                                 $one_event['reservation_participant_location'] = $new_appt_location;
                                 $one_event['reservation_created_at'] = $appt_update_datetime;
                                 $one_event['lra_date_scheduled']  = $new_appt_datetime;
+                                // Only for GenPop - set site affilication
+                                if ($pid == $genpop_pid) {
+                                    $one_event['reservation_site_affiliation'] = 1;
+                                }
                                 $update_visits[] = $one_event;
                                 $found_events[$mrn][] = $events[$visit_num];
                                 $overall_count++;
