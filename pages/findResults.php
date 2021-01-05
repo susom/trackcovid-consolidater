@@ -190,7 +190,7 @@ foreach($configs as $fields => $list) {
 
 }
 
-
+/*
 // Whether or not the last status is good, create a record in the unmatched lab project
 $return_fields = array_merge(array("record_id", "redcap_event_name"), $loader_return_fields);
 $retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autoloader_fields);
@@ -198,6 +198,7 @@ $retrieval_fields = array_merge(array("record_id", "redcap_event_name"), $autolo
 // Figure out which results were not used in matching records and store them in a new project
 $status = reportChanges($this_proj, $dag_name, $results_table, $retrieval_fields,
     $autoload_field_list, $org, $event_array, $mrn_records);
+*/
 
 print $status;
 return;
