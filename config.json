@@ -48,7 +48,7 @@
                 "url": "pages/MatchStanfordLabData.php"
             },
             {
-                "name": "TrackCovid: Load Stanford Appointment Data",
+                "name": "TrackCovid: Load Stanford Appt and Vax Dates",
                 "icon": "gear",
                 "url": "pages/MatchStanfordApptData.php"
             }
@@ -57,7 +57,8 @@
 	"no-auth-pages": [
         "pages/findResults",
         "pages/findAppointments",
-        "pages/calcVisitWindow"
+        "pages/findVaccines",
+        "pages/CalculateWindowDates"
     ],
 	"project-settings": [
 		{
@@ -123,6 +124,12 @@
         {
             "key": "load-appointments",
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>Load appointments</span></h6>When checked, the appointment loader will load appointments retrieved from STARR",
+            "required": false,
+            "type": "checkbox"
+        },
+        {
+            "key": "load-vaccines",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Load vaccines</span></h6>When checked, the vaccine loader will load vaccination dates retrieved from STARR",
             "required": false,
             "type": "checkbox"
         },
@@ -193,29 +200,6 @@
     ],
 
 	"crons": [
-        {
-            "cron_name": "load_stanford_data",
-            "cron_description": "This cron will run once a week on Sundays at 7pm to pull data from STARR and load into TrackCovid projects.",
-            "method": "loadStanfordData",
-            "cron_weekday": 0,
-            "cron_hour":    19,
-            "cron_minute":  0
-        },
-        {
-            "cron_name": "load_stanford_appt_data",
-            "cron_description": "This cron will run daily at 7:30pm to pull data from STARR and load appointment data into TrackCovid projects.",
-            "method": "loadStanfordApptData",
-            "cron_hour":    19,
-            "cron_minute":  30
-        },
-        {
-            "cron_name": "load_calc_visit_windows",
-            "cron_description": "This cron will run once a week at 7:50pm to calculate visit windows for each event",
-            "method": "fillInApptWindowLimits",
-            "cron_weekday": 0,
-            "cron_hour":    19,
-            "cron_minute":  50
-        }
     ],
 
 	"compatibility": {

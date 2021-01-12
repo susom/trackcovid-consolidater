@@ -12,6 +12,13 @@ if ($action == 'load') {
     $module->emDebug("Back from appointment loader: " . $status);
     print $status;
     return;
+} else if ($action == 'loadVax') {
+    $module->emDebug("About to run Stanford vaccination loader");
+    $status = $module->loadStanfordVaxData();
+    $module->emDebug("Back from vaccination loader: " . $status);
+    print $status;
+    return;
+
 }
 
 ?>
@@ -32,10 +39,13 @@ if ($action == 'load') {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.7.14/js/bootstrap-datetimepicker.min.js"></script>
 
-        <title>Initiate TrackCovid Appointment Loader</title>
+        <title>Initiate TrackCovid Appointment and Vaccination Loader</title>
     </header>
     <body>
+
         <container>
+
+            <!--   Appointment Loader   --->
             <div style="width: 90%; padding: 20px">
                 <h3 style="color:blue">Automated loader for Stanford Appointment data to load appointments into TrackCovid projects.</h3>
             </div>
@@ -50,6 +60,22 @@ if ($action == 'load') {
                 <label id="status" />
             </div>
 
+            <!--   Vaccination Loader   -->
+            <div style="width: 90%; padding: 20px">
+                <h3 style="color:blue">Automated loader for Stanford Vaccination data to load vaccination dates into TrackCovid projects.</h3>
+            </div>
+
+            <div style="padding: 20px">
+                <form method="post">
+                    <input class="btn-lg" type="button" id="submitVax" value="Load Stanford Vaccination Results" />
+                </form>
+            </div>
+
+            <div style="padding: 20px">
+                <label id="statusVax" />
+            </div>
+
+
         </container>
 
     </body>
@@ -63,6 +89,11 @@ if ($action == 'load') {
         });
     });
 
+    $(function () {
+        $("#submitVax").bind("click", function () {
+            TrackCovid.loadVaxConfig();
+        });
+    });
 
     var TrackCovid = TrackCovid || {};
 
@@ -95,5 +126,36 @@ if ($action == 'load') {
         });
 
     };
+
+    // Make the API call back to the server to load the new config\
+    TrackCovid.loadVaxConfig = function() {
+
+        // Add a busy cursor
+        $("body").css("cursor", "progress");
+
+        $.ajax({
+            type: "POST",
+            data: {
+                "action"        : "loadVax"
+            },
+            success:function(status) {
+                // Return the cursor back to normal
+                $("body").css("cursor", "default");
+
+                // Display results of load
+                if (status === "1") {
+                    $("#statusVax").text("Successfully loaded vaccination data").css({"color": "red"});
+                } else {
+                    $("#statusVax").text("Problem loading vaccination data. Please contact the REDCap team.").css({"color": "red"});
+                }
+            }
+        }).done(function (status) {
+            console.log("Done from TrackCovid Vaccination Loader");
+        }).fail(function (jqXHR, textStatus, errorThrown) {
+            console.log("Failed in TrackCovid Vaccination Loader");
+        });
+
+    };
+
 
 </script>

@@ -387,7 +387,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         // Retrieve the chart pid so we can check the IRB
         $irb_pid = $this->getSystemSetting('chart-pid');
-        $this->emDebug("Process appointment data: IRB project id $irb_pid");
         $status = false;
 
         // Retrieve the Stanford lab data from Redcap to STARR Link EM.  The data file will be writtne
@@ -396,7 +395,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         try {
             $RSL = \ExternalModules\ExternalModules::getModuleInstance('redcap_to_starr_link');
             $filename = $RSL->getStanfordTrackCovidAppts($irb_pid);
-            //$filename = APP_PATH_TEMP . 'StanfordAppts_12072020.csv';
+            //$filename = APP_PATH_TEMP . 'StanfordAppts_12072020_short.csv';
             if ($filename == false) {
                 $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
             } else {
@@ -459,7 +458,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         $this->emDebug("Process and load window calculations for Chart: $chart_pid");
 
         // Generate the URL
-        $this_url = $this->getUrl('pages/calcVisitWindow.php?pid=' . $chart_pid, true, true);
+        $this_url = $this->getUrl('pages/CalculateWindowDates.php?pid=' . $chart_pid, true, true);
         $status = http_get($this_url);
         if ($status == false) {
             $this->emError("Processing visit windows for project $chart_pid failed");
@@ -470,5 +469,77 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         return $status;
     }
 
+
+    /**
+     * Process new CSV in the REDCAP temp folder which holds vaccination data - this method is for the CRON
+     */
+    public function loadStanfordVaxData() {
+
+        // Retrieve the chart pid so we can check the IRB
+        $irb_pid = $this->getSystemSetting('chart-pid');
+        $status = false;
+
+        // Retrieve the Stanford vaccination data from Redcap to STARR Link EM.  The data file will be
+        // written to the temporary directory in REDCap.
+        // Switch this when not debugging
+        try {
+            $RSL = ExternalModules::getModuleInstance('redcap_to_starr_link');
+            $filename = $RSL->getStanfordTrackCovidVax($irb_pid);
+            //$filename = APP_PATH_TEMP . 'StanfordVax_01092021.csv';
+
+            if ($filename == false) {
+                $this->emError("Could not retrieve Stanford vaccination data for " . date('Y-m-d'));
+            } else {
+                $this->emDebug("Successfully retrieved Stanford vaccination data");
+
+                // Load all projects that have the checkbox set in the EM config
+                $status = $this->processVaccinations($filename);
+
+                // Delete the vaccinations file after processing
+                $this->discardCSV($filename);
+
+            }
+        } catch (Exception $ex) {
+            $this->emError("Could not instantiate REDCap to STARR link to retrieve Stanford Vaccination data");
+        }
+
+        return $status;
+    }
+
+    /**
+     * Send the filename to the page which will process and load the vaccinations
+     *
+     * @param $filename
+     * @return bool
+     */
+    private function processVaccinations($filename) {
+
+        $status = false;
+
+        //get all projects that are enabled for this module
+        $enabled = ExternalModules::getEnabledProjects($this->PREFIX);
+        $this->emDebug("Enabled Projects: " . json_encode($enabled));
+
+        // Loop over each project that has this module enabled
+        while($proj = $enabled->fetch_assoc()) {
+
+            $pid = $proj['project_id'];
+
+            // Create the API URL to this project.
+            $this_url = $this->getUrl('pages/findVaccines.php?pid=' . $pid, true, true) .
+                "&filename=" . $filename;
+            $this->emDebug("Calling cron to process vaccinations for project $pid at URL " . $this_url);
+
+            // Go into project context and process data for this project
+            $status = http_get($this_url);
+            if ($status == false) {
+                $this->emError("Processing vaccinations for project $pid failed");
+            } else {
+                $this->emDebug("Processing vaccinations for project $pid was successful");
+            }
+        }
+
+        return $status;
+    }
 
 }
