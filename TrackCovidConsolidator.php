@@ -5,7 +5,8 @@ require_once "emLoggerTrait.php";
 
 use Exception;
 use ExternalModules\ExternalModules;
-use function Stanford\RedcapToStarrLink\checkIRBAndSetupRequest;
+
+use GuzzleHttp\Client;
 
 class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
@@ -272,24 +273,25 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         //get all projects that are enabled for this module
         $enabled = ExternalModules::getEnabledProjects($this->PREFIX);
-        $this->emDebug("Enabled Projects: " . json_encode($enabled));
 
         // Loop over each project that has this module enabled
         while($proj = $enabled->fetch_assoc()) {
 
             $pid = $proj['project_id'];
 
-            // Create the API URL to this project.
             $this_url = $this->getUrl('pages/findResults.php?pid=' . $pid, true, true) .
                 '&org=' . $this->institution;
             $this->emDebug("Calling findResults for project $pid at URL " . $this_url);
 
             // Go into project context and process data for this project
-            $status = http_get($this_url);
-            if ($status == false) {
-                $this->emError("Processing for project $pid failed");
+            $client = new Client();
+            $resp = $client->get($this_url);
+            if ($resp->getStatusCode() == 200) {
+                $status = true;
+                $this->emDebug("Processing lab results for project $pid was successful");
             } else {
-                $this->emDebug("Processing for project $pid was successful");
+                $status = false;
+                $this->emError("Processing lab results for project $pid failed");
             }
         }
 
@@ -395,20 +397,20 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         try {
             $RSL = \ExternalModules\ExternalModules::getModuleInstance('redcap_to_starr_link');
             $filename = $RSL->getStanfordTrackCovidAppts($irb_pid);
-            //$filename = APP_PATH_TEMP . 'StanfordAppts_12072020_short.csv';
             if ($filename == false) {
                 $this->emError("Could not retrieve Stanford appointment data for " . date('Y-m-d'));
             } else {
                 $this->emDebug("Successfully retrieved Stanford appointment data");
 
                 // Load all projects that have the checkbox set in the EM config
-                $status = $this->processAppointments($filename);
+                $status = $this->processAppointments();
 
                 // Delete the appointment file after processing
                 $this->discardCSV($filename);
 
             }
         } catch (Exception $ex) {
+            $this->emDebug("Exception: " . json_encode($ex));
             $this->emError("Could not instantiate REDCap to STARR link to retrieve Stanford Appointment data");
         }
 
@@ -418,10 +420,9 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
     /**
      * Send the filename to the page which will process and load the appointments
      *
-     * @param $filename
      * @return bool
      */
-    private function processAppointments($filename) {
+    private function processAppointments() {
 
         $status = false;
 
@@ -435,16 +436,17 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $pid = $proj['project_id'];
 
             // Create the API URL to this project.
-            $this_url = $this->getUrl('pages/findAppointments.php?pid=' . $pid, true, true) .
-                        "&filename=" . $filename;
-            $this->emDebug("Calling cron to process appointments for project $pid at URL " . $this_url);
+            $appt_url = $this->getUrl("pages/findAppointments.php?pid=" . $pid, true, true);
+            $this->emDebug("Calling in project context to process appointments for project $pid at URL " . $appt_url);
 
             // Go into project context and process data for this project
-            $status = http_get($this_url);
-            if ($status == false) {
-                $this->emError("Processing appointments for project $pid failed");
+            $client = new Client();
+            $resp = $client->get($appt_url);
+            if ($resp->getStatusCode() == 200) {
+                $status = true;
             } else {
-                $this->emDebug("Processing appointments for project $pid was successful");
+                $status = false;
+                $this->emError("Processing appointments for project $pid failed");
             }
         }
 
@@ -485,7 +487,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         try {
             $RSL = ExternalModules::getModuleInstance('redcap_to_starr_link');
             $filename = $RSL->getStanfordTrackCovidVax($irb_pid);
-            //$filename = APP_PATH_TEMP . 'StanfordVax_01092021.csv';
 
             if ($filename == false) {
                 $this->emError("Could not retrieve Stanford vaccination data for " . date('Y-m-d'));
@@ -493,7 +494,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                 $this->emDebug("Successfully retrieved Stanford vaccination data");
 
                 // Load all projects that have the checkbox set in the EM config
-                $status = $this->processVaccinations($filename);
+                $status = $this->processVaccinations();
 
                 // Delete the vaccinations file after processing
                 $this->discardCSV($filename);
@@ -512,13 +513,12 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
      * @param $filename
      * @return bool
      */
-    private function processVaccinations($filename) {
+    private function processVaccinations() {
 
         $status = false;
 
         //get all projects that are enabled for this module
         $enabled = ExternalModules::getEnabledProjects($this->PREFIX);
-        $this->emDebug("Enabled Projects: " . json_encode($enabled));
 
         // Loop over each project that has this module enabled
         while($proj = $enabled->fetch_assoc()) {
@@ -526,16 +526,18 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $pid = $proj['project_id'];
 
             // Create the API URL to this project.
-            $this_url = $this->getUrl('pages/findVaccines.php?pid=' . $pid, true, true) .
-                "&filename=" . $filename;
+            $this_url = $this->getUrl('pages/findVaccines.php?pid=' . $pid, true, true);
             $this->emDebug("Calling cron to process vaccinations for project $pid at URL " . $this_url);
 
             // Go into project context and process data for this project
-            $status = http_get($this_url);
-            if ($status == false) {
-                $this->emError("Processing vaccinations for project $pid failed");
+            $client = new Client();
+            $resp = $client->get($this_url);
+            if ($resp->getStatusCode() == 200) {
+                $status = true;
+                $this->emError("Processing vaccination dates for project $pid was successful");
             } else {
-                $this->emDebug("Processing vaccinations for project $pid was successful");
+                $status = false;
+                $this->emError("Processing vaccination dates for project $pid failed");
             }
         }
 

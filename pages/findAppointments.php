@@ -5,14 +5,18 @@ namespace Stanford\TrackCovidConsolidator;
 use REDCap;
 
 $pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
-$filename = isset($_GET['filename']) && !empty($_GET['filename']) ? $_GET['filename'] : null;
-
-$module->emDebug("This is project ID $pid and filename $filename");
 
 // If we don't receive a project to process, we can't continue.
 if (is_null($pid)) {
     $module->emError("A project ID must be included to run this script");
     return false;
+} else {
+    // Generate filename based on date and see if it exists. If not, exit.
+    $file_path_name = APP_PATH_TEMP . 'StanfordAppts_' . date('mdY') . '.csv';
+    if (!file_exists($file_path_name)) {
+        $module->emDebug("File " . $file_path_name . " does not exist for project " . $pid);
+        return;
+    }
 }
 
 // See if this project wants the appointments loaded
@@ -97,7 +101,7 @@ if (empty($appt_records)) {
 }
 
 // Read in appointment file
-$appointment_file_data = readAppointmentData($filename);
+$appointment_file_data = readAppointmentData($file_path_name);
 if (empty($appointment_file_data)) {
     $module->emDebug("There are no appointments in the STARR file for project " . $pid . ". Skipping processing");
     return true;
@@ -194,10 +198,6 @@ foreach($record_mrns as $mrn => $record) {
                                 $one_event['reservation_participant_location'] = $new_appt_location;
                                 $one_event['reservation_created_at'] = $appt_update_datetime;
                                 $one_event['lra_date_scheduled']  = $new_appt_datetime;
-                                // Only for GenPop - set site affilication
-                                if ($pid == $genpop_pid) {
-                                    $one_event['reservation_site_affiliation'] = 1;
-                                }
                                 $update_visits[] = $one_event;
                                 $found_events[$mrn][] = $events[$visit_num];
                                 $overall_count++;

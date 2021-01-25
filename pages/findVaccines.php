@@ -5,15 +5,18 @@ namespace Stanford\TrackCovidConsolidator;
 use REDCap;
 
 $pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
-$filename = isset($_GET['filename']) && !empty($_GET['filename']) ? $_GET['filename'] : null;
 
 // If we don't receive a project to process, we can't continue.
 if (is_null($pid)) {
     $module->emError("A project ID must be included to run this script");
     return false;
-} else if (is_null($filename)) {
-    $module->emError("A vaccination filename must be included to run this script");
-    return false;
+} else {
+    // Put together the filename for today
+    $filename = APP_PATH_TEMP . 'StanfordVax_' . date('mdY') . '.csv';
+    if (!file_exists($filename)) {
+        $module->emDebug("Vaccination Dates File " . $filename . " does not exist for project " . $pid);
+        return;
+    }
 }
 
 
@@ -59,7 +62,7 @@ foreach($vac_data as $mrn => $dates) {
         $ncnt++;
 
         // Save every 10 records so it doesn't take too long
-        if (($ncnt % 10) == 0) {;
+        if (($ncnt % 5) == 0) {;
             $return = REDCap::saveData('json', json_encode($vax_data_to_save));
             $module->emDebug("Return from vaccination saveData for number of records $ncnt: " . json_encode($return));
             $vax_data_to_save = array();
