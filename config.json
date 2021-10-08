@@ -9,16 +9,6 @@
 
 	"authors": [
 		{
-			"name": "Andrew Martin",
-			"email": "andy123@stanford.edu",
-			"institution": "Stanford University"
-		},
-		{
-			"name": "Irvin Szeto",
-			"email": "irvins@stanford.edu",
-			"institution": "Stanford University"
-		},
-		{
 			"name": "Lee Ann Yasukawa",
 			"email": "yasukawa@stanford.edu",
 			"institution": "Stanford University"
@@ -34,31 +24,18 @@
 				"name": "TrackCovid: Load UCSF Lab Data",
                 "icon": "gear",
                 "url": "pages/MatchUCSFLabData.php"
-			},
-            {
-                "name": "TrackCovid: Calculate window dates",
-                "icon": "gear",
-                "url": "pages/CalculateWindowDates.php"
-            }
+			}
         ],
 		"control-center": [
             {
                 "name": "TrackCovid: Load Stanford Lab Data",
                 "icon": "gear",
                 "url": "pages/MatchStanfordLabData.php"
-            },
-            {
-                "name": "TrackCovid: Load Stanford Appt and Vax Dates",
-                "icon": "gear",
-                "url": "pages/MatchStanfordApptData.php"
             }
         ]
 	},
 	"no-auth-pages": [
-        "pages/findResults",
-        "pages/findAppointments",
-        "pages/findVaccines",
-        "pages/CalculateWindowDates"
+        "pages/findResults"
     ],
 	"project-settings": [
 		{
@@ -67,12 +44,6 @@
 			"required": false,
 			"type": "checkbox"
 		},
-        {
-            "key": "skip-covid-window",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Covid Window Records to Skip</span></h6>Comma separated list of records to skip when processing covid windows",
-            "required": false,
-            "type": "text"
-        },
         {
             "key": "lower-limit",
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>Days to subtract for lower window</span></h6>Number of days to subtract to target window for lower limit",
@@ -86,14 +57,8 @@
             "type": "text"
         },
         {
-            "key": "window-schedule",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Target windows</span></h6>JSON object of target window date for each event",
-            "required": false,
-            "type": "text"
-        },
-        {
-            "key": "stanford-birth-date",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Stanford Birth date field</span></h6>Field which stores the Stanford birthdate",
+            "key": "birth-date",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Birth date field</span></h6>Field which stores the participant birthdate",
             "required": true,
             "type": "field-list"
         },
@@ -104,48 +69,22 @@
             "type": "field-list"
         },
         {
-            "key": "ucsf-birth-date",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>UCSF Birth date field</span></h6>Field which stores the UCSF birthdate",
-            "required": true,
-            "type": "field-list"
-        },
-        {
             "key": "ucsf-mrn",
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>UCSF MRN field</span></h6>Field which stores the UCSF mrn",
             "required": true,
             "type": "field-list"
         },
         {
-            "key": "baseline-event",
+            "key": "screening-event",
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>Event</span></h6>Event where the MRN and DoB reside",
             "required": true,
             "type": "event-list"
         },
         {
-            "key": "load-appointments",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Load appointments</span></h6>When checked, the appointment loader will load appointments retrieved from STARR",
-            "required": false,
-            "type": "checkbox"
-        },
-        {
-            "key": "load-vaccines",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Load vaccines</span></h6>When checked, the vaccine loader will load vaccination dates retrieved from STARR",
-            "required": false,
-            "type": "checkbox"
-        },
-        {
-            "key": "lab-fields",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Lab Result configurations</span></h6>Enter the parameters for each group of labs that we need to match results to",
-            "type": "sub_settings",
-            "repeatable": true,
-            "sub_settings": [
-                {
-                    "key": "fields",
-                    "name": "<h6><span class='text-lg badge badge-lg badge-success'>List of fields</span></h6>Comma separated list of appointment/results fields that are grouped together for a set of labs in the following order: 1. date_of_visit, 2. location_collected, 3. pcr_id, 4. igg_id",
-                    "required": true,
-                    "type": "textarea"
-                }
-            ]
+            "key": "lab-event-list",
+            "name": "<h6><span class='text-lg badge badge-lg badge-success'>List of event ids</span></h6>Event IDs where lab values need to be matched",
+            "required": true,
+            "type": "text"
         }
     ],
 	"system-settings": [
@@ -162,32 +101,8 @@
             "type": "text"
         },
         {
-            "key": "chart-pid",
-            "name": "<b>PID of Chart Project</b><br>Select the Chart Project",
-            "required": true,
-            "type": "project-id"
-        },
-        {
-            "key": "proto-pid",
-            "name": "<b>PID of Proto Project</b><br>Select the Proto Project",
-            "required": true,
-            "type": "project-id"
-        },
-        {
-            "key": "genpop-pid",
-            "name": "<b>PID of Gen Pop Project</b><br>Select the Gen Pop Project",
-            "required": true,
-            "type": "project-id"
-        },
-        {
-            "key": "scheduler-pid",
-            "name": "<b>PID of the Scheduler project</b><br>Redcap Scheduler Project",
-            "required": true,
-            "type": "project-id"
-        },
-        {
-            "key": "allowed-users-for-loader",
-            "name": "<b>Users allowed to run loader</b><br>Comma-separated list of sunet IDs who are allowed to run the UCSF loader.",
+            "key": "allowed-users-for-ucsf-loader",
+            "name": "<b>Users allowed to run the UCSF loader</b><br>Comma-separated list of sunet IDs who are allowed to run the UCSF loader.",
             "required": true,
             "type": "text"
         },

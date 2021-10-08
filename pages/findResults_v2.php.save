@@ -1,0 +1,709 @@
+<?php
+namespace Stanford\TrackCovidConsolidator;
+/** @var \Stanford\TrackCovidConsolidator\TrackCovidConsolidator $module */
+
+use REDCap;
+
+$pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
+$org = isset($_GET['org']) && !empty($_GET['org']) ? $_GET['org'] : null;
+$content = isset($_GET['content']) && !empty($_GET['content']) ? $_GET['content'] : null;
+$module->emDebug("In findResults_v2: PID = " . $pid . ", org = " . $org);
+
+// If we don't receive a project to process or an organization, we can't continue.
+$allowable_orgs = array("stanford","ucsf");
+if (is_null($pid)) {
+    $module->emError("A project ID must be included to run this script");
+    return false;
+} else if (is_null($org)) {
+    $module->emError("An organization must be associated with data so the loader can process the data.");
+    return false;
+} else if (!in_array($org, $allowable_orgs)) {
+    $module->emError("This is not a valid organization $org for project $pid");
+    return false;
+}
+
+// These are the fields we need to process and store the lab data
+if ($org == 'stanford') {
+    $retrieve_fields = array('stanford_date_lab', 'stanford_pcr_id', 'stanford_igg_id');
+    $autoloader_fields = array('lra_pcr_result', 'lra_pcr_date', 'lra_pcr_assay_method', 'lra_pcr_match_methods',
+        'lra_ab_result', 'lra_ab_date', 'lra_ab_match_methods', 'lra_ab_assay_method');
+} else {
+    $retrieve_fields = array('ucsf_date_lab', 'ucsf_pcr_id', 'ucsf_igg_id');
+    $autoloader_fields = array('lra_pcr_result', 'lra_pcr_date', 'lra_pcr_assay_method', 'lra_pcr_match_methods',
+        'lra_ab_result_2', 'lra_ab_date_2', 'lra_ab_assay_method_2', 'lra_ab_match_methods_2');
+}
+
+/**
+ * Retrieve the config data so we know where to pull patient data in the project
+ */
+$birthdate_field = $module->getProjectSetting('birth-date');
+if ($org == 'stanford') {
+    $mrn_field = $module->getProjectSetting('stanford-mrn');
+} else {
+    $mrn_field = $module->getProjectSetting('ucsf-mrn');
+}
+$baseline_event_id = $module->getProjectSetting('screening-event');
+$module->emDebug("This is the MRN field $mrn_field and this is the birth date field $birthdate_field and baseline event $baseline_event_id");
+
+$eventids_to_load = $module->getProjectSetting('lab-event-list');
+$event_ids = explode(",", $eventids_to_load);
+$module->emDebug("Event list: " . json_encode($event_ids) . ", and event where mrn is $baseline_event_id");
+
+// Retrieve the record_id, birth_date and mrn in a table track_covid_mrn_dob
+$phi_fields = array(REDCap::getRecordIdField(),$mrn_field, $birthdate_field);
+$filter = "[". $mrn_field . "] <> ''";
+$mrn_records = getProjectRecords($phi_fields, $filter, $baseline_event_id);
+if (empty($mrn_records)) {
+    $module->emDebug("There are no records in project " . $pid . ". Skipping processing");
+    return true;
+}
+$module->emDebug("MRN and DOB fields: " . json_encode($mrn_records));
+
+
+// Read in lab results that we will use to match with REDCap records
+//$lab_results = readLabResults();
+
+
+/**
+ * Now loop over all events and retrieve the date sent to lab data and sample IDs for each visit
+ */
+
+foreach($event_ids as $event_id) {
+
+    // Retrieve lab data for this event - only bring back data filtering out records that have nothing in the
+    // date sent to lab or sample id fields
+    $filter = "([" . $retrieve_fields[0] . "] <> '') or ([" . $retrieve_fields[1] . "] <> '') or ([" . $retrieve_fields[2] . "] <> '')";
+    $redcap_records = getProjectRecords($retrieve_fields, $filter, $event_id);
+
+    // Match and store the data in REDCap. The array we get back has the original list of lab results minus the ones already matched
+    $lab_results = matchLabResults($redcap_records, $lab_results);
+
+}
+
+// For any leftover results, create a record in the Unmatched Redcap project
+//$status = saveLeftOverResults($lab_results);
+
+$status = true;
+print $status;
+return;
+
+
+/**
+ * Retrieve current project data and load into the database table so we can manipulate it
+ */
+function getProjectRecords($fields, $filter, $event_id=null) {
+
+    global $module;
+
+    // These are unwanted characters that might be entered in the pcr_id, igg_id field that we want to strip out
+    $unwanted = array('/', '\\', '"', ',', ' ');
+    $replace_unwanted = array('','','','', '');
+
+    /**
+      * We are retrieving record_id, mrn and dob into its own table so we can join against each event.
+      * For each event which will match to a lab result, these are the fields we are retrieving
+      * The field order is:  0) date_sent_to_lab, 2) pcr_id, 3) igg_id
+      * And the loader fields are the same for each project:
+      *                      0) lra_pcr_result, 1) lra_pcr_date, 2) lra_pcr_assay_method, 3) lra_pcr_match_methods,
+      *                      4) lra_ab_result (_2),  5) lra_ab_date (_2),  6) lra_ab_assay_method (_2),  7) lra_ab_match_methods (_2)
+      * When the match fields come back, there will be 5 options because they are checkboxes:
+      *                      1) lra_pcr_match_methods___1/lra_ab_match_methods___1 = MRN
+      *                      2) lra_pcr_match_methods___2/lra_ab_match_methods___2 = Sample ID
+      *                      3) lra_pcr_match_methods___3/lra_ab_match_methods___3 = DOB
+      *                      4) lra_pcr_match_methods___4/lra_ab_match_methods___4 = Last Name
+      *                      5) lra_pcr_match_methods___5/lra_ab_match_methods___5 = Sample Date
+      */
+    $params = array(
+        'return_format' => 'json',
+        'events'        => $event_id,
+        'fields'        => $fields,
+        'filterLogic'   => $filter
+    );
+
+    $q = REDCap::getData($params);
+
+    // Replace all backslashs by blanks otherwise we can't load into the database
+    // Sometimes there are backslashs put in the sample id fields and we want to delete them.
+    $records = json_decode($q, true);
+
+    return $records;
+}
+
+function matchLabResults($redcap_records, $lab_results) {
+
+    global $module;
+
+    foreach($lab_results as $one_lab) {
+
+    }
+
+
+
+}
+
+/**
+ *  This function takes the PCR results and IgG results and merges them together for the same record ID
+ *  and redcap_event_name.  We will end up with a table with the most recent results. It will help to
+ *  track changes between loads and to overwrite previously entered lab values if needed.
+ *  Not sure this is the easiest way to do this but I am making a table of all the recent lab results,
+ *  <table track_covid_found_results>, and we have a table of the starting lab values that were previously
+ *  loaded <table track_covid_project_records>.
+ *
+ * @param $all_pcr_results
+ * @param $all_ab_results
+ * @return array - Array of all the results per record/redcap_event_id
+ */
+function merge_all_results($all_pcr_results, $all_ab_results, $results_table, $pcr_field_list, $ab_field_list) {
+
+    global $module;
+
+    $temp_table = 'track_covid_temp';
+    $rc_events = 'record_id,redcap_event_name';
+    $headers_pcr = $rc_events . ',' . $pcr_field_list;
+    $headers_ab = $rc_events . ',' . $ab_field_list;
+    $lra_all = $rc_events . ',' . $pcr_field_list . ',' . $ab_field_list;
+
+    // It will be easier to find differences between what is currently in the database and what we are
+    // going to load and to also find which records we do not have data for and make sure all those results
+    // are blank, I'm going to add these results to another table and do my manipulations there.
+    $module->truncateDb($results_table);
+
+    // First copy over the records/events that we are looking for results for
+    $sql = 'insert into track_covid_found_results (record_id, redcap_event_name) ' .
+                ' select record_id, redcap_event_name from track_covid_project_records ';
+    $q = db_query($sql);
+    $num_rows = db_affected_rows($q);
+    $module->emDebug("Inserted rows into track_covid_found_results: " . $num_rows);
+
+    if (!empty($all_pcr_results)) {
+        // Now put together the SQL to load this PCR data into a temp table so we can merge into the results table
+        // based on record_id and redcap_event_name
+        $module->truncateDb($temp_table);
+        $status = $module->pushDataIntoDB($temp_table, $headers_pcr, $all_pcr_results);
+        if (!$status) {
+            $module->emError("Could not load data into table $temp_table with headers $headers_pcr");
+            return false;
+        }
+
+        // Now that the data is loaded into the database, query for PCR values.
+        $sql =
+            'UPDATE track_covid_found_results fr ' .
+            ' INNER JOIN ' .
+            ' track_covid_temp temp ON fr.record_id = temp.record_id and fr.redcap_event_name = temp.redcap_event_name ' .
+            ' SET ' .
+            ' fr.lra_pcr_date = temp.lra_pcr_date, ' .
+            ' fr.lra_pcr_result = temp.lra_pcr_result, ' .
+            ' fr.lra_pcr_assay_method = temp.lra_pcr_assay_method, ' .
+            ' fr.lra_pcr_match_methods___1 = temp.lra_pcr_match_methods___1, ' .
+            ' fr.lra_pcr_match_methods___2 = temp.lra_pcr_match_methods___2, ' .
+            ' fr.lra_pcr_match_methods___3 = temp.lra_pcr_match_methods___3, ' .
+            ' fr.lra_pcr_match_methods___4 = temp.lra_pcr_match_methods___4, ' .
+            ' fr.lra_pcr_match_methods___5 = temp.lra_pcr_match_methods___5 ';
+        $q = db_query($sql);
+        $num_rows = db_affected_rows($q);
+        $module->emDebug("Merged PCR data into track_covid_found_results: " . $num_rows);
+    }
+
+    if (!empty($all_ab_results)) {
+        // Now put together the SQL to merge this IgG data into a temp table so we can merge into the results table
+        // based on record_id and redcap_event_name for IGG data
+        $module->truncateDb($temp_table);
+        $status = $module->pushDataIntoDB($temp_table, $headers_ab, $all_ab_results);
+        if (!$status) {
+            $module->emError("Could not load data into $temp_table for IgG project data");
+            return false;
+        }
+
+        // Now that the IgG data from the project are loaded, match the values with the loaded data from the csv.
+        $sql =
+            'UPDATE track_covid_found_results fr ' .
+            ' INNER JOIN ' .
+            ' track_covid_temp temp ON fr.record_id = temp.record_id and fr.redcap_event_name = temp.redcap_event_name ' .
+            ' SET ' .
+            ' fr.lra_ab_date = temp.lra_ab_date, ' .
+            ' fr.lra_ab_result = temp.lra_ab_result, ' .
+            ' fr.lra_ab_assay_method = temp.lra_ab_assay_method, ' .
+            ' fr.lra_ab_match_methods___1 = temp.lra_ab_match_methods___1, ' .
+            ' fr.lra_ab_match_methods___2 = temp.lra_ab_match_methods___2, ' .
+            ' fr.lra_ab_match_methods___3 = temp.lra_ab_match_methods___3, ' .
+            ' fr.lra_ab_match_methods___4 = temp.lra_ab_match_methods___4, ' .
+            ' fr.lra_ab_match_methods___5 = temp.lra_ab_match_methods___5 ';
+        $q = db_query($sql);
+        $num_rows = db_affected_rows($q);
+        $module->emDebug("Merged rows of IGG into track_covid_found_results: " . $num_rows);
+    }
+
+    // Now download the <track_covid_found_results> table and prepare it to load into Redcap
+    $sql = 'select fr.* from track_covid_found_results fr join track_covid_project_records pr' .
+            '          on pr.record_id = fr.record_id and pr.redcap_event_name = fr.redcap_event_name ' .
+            ' where ((pr.lra_ab_result <> fr.lra_ab_result) or (pr.lra_pcr_result <> fr.lra_pcr_result)' .
+            '       or (pr.lra_ab_date <> fr.lra_ab_date) or (pr.lra_pcr_date <> fr.lra_pcr_date) ' .
+            '       or (pr.lra_ab_assay_method <> fr.lra_ab_assay_method) or (pr.lra_pcr_assay_method <> fr.lra_pcr_assay_method))';
+    $q = db_query($sql);
+
+    // Create json objects that we can easily load into redcap.
+    $lra_headers = explode(',',$lra_all);
+    $final_results = array();
+    while ($results = db_fetch_assoc($q)) {
+        $final_results[] = array_combine($lra_headers, $results);
+    }
+
+    return $final_results;
+}
+
+/**
+ * Store records where matches were found between this project's records and the CSV file with lab results
+ *
+ * @param $data_to_save
+ * @return bool
+ */
+function saveResults($data_to_save) {
+
+    global $module;
+
+    $status = true;
+    $save_date = array();
+    $ntotal = count($data_to_save);
+    $ncnt = 0;
+    foreach($data_to_save as $id => $info) {
+        $save_data[] = $info;
+        if (($ncnt % 20) == 0) {
+            $return = REDCap::saveData('json', json_encode($save_data));
+            if(!empty($return["errors"])){
+                $module->emDebug("Error saving lab matches " . json_encode($return["errors"]));
+                $status = false;
+            } else {
+                $module->emDebug("Successfully saved 20 out of $ntotal records: " . $return['item_count']);
+            }
+
+            $save_data = array();
+        }
+        $ncnt++;
+    }
+
+    if (count($save_data) > 0) {
+        $return = REDCap::saveData('json', json_encode($save_data));
+        if(!empty($return["errors"])){
+            $module->emDebug("Error saving lab matches " . json_encode($return["errors"]));
+            $status = false;
+        } else {
+            $module->emDebug("Successfully saved rest of data with item count: " . $return['item_count']);
+        }
+    }
+    return $status;
+}
+
+/**
+ * We are going to report items that each project is interested in. So far, these are the checks:
+ *      1) Indicate labs that were taken > 7 days that don't have results
+ *      2) How many records can be matched if the MRN was present based on DoB/Date Collected only
+ *      3) How many records can be matched if the MRN was present based on sample_id only
+ *      4) How many total cumulative positives (AB and PCR) and how many incremental positives are there?
+ */
+function reportChanges($project, $dag_name, $results_table, $retrieval_fields,
+                       $autoload_field_list, $org, $event_list, $mrn_records) {
+
+    global $module;
+
+    $status = true;
+    //$cutoff_date = date('Y-m-d', strtotime("-6 weeks"));
+    $cutoff_date = date('Y-m-d', strtotime("-9 months"));
+    $module->emDebug("Cutoff date: " . $cutoff_date);
+
+    // Make an array of records that belong to this organization
+    $unwanted = array('(', ')', '"');
+    $replace = array('', '', '');
+    $mrn_list = array();
+    foreach($mrn_records as $key => $record) {
+        $substring = str_replace($unwanted, $replace, $record);
+        $split = explode(',', $substring);
+        $mrn_list[] = $split[0];
+    }
+
+    // Retrieve the final list of autoloaded results so we can compare against the results in the file
+    // and see which results are leftover results
+    $module->truncateDb($results_table);
+    $filter = "([event-name][lra_pcr_result] <> '' or [event-name][lra_ab_result] <> '')";
+    $module->emDebug("Report filter: " . $filter);
+    $params = array(
+        'return_format' => 'json',
+        'records'       => $mrn_list,
+        'events'        => $event_list,
+        'fields'        => $retrieval_fields,
+        'filterLogic'   => $filter
+    );
+
+    $q = REDCap::getData($params);
+    $records = json_decode($q, true);
+    $module->emDebug("Retrieved " . count($records) . " records to check against lab file");
+
+    $headers = "record_id,redcap_event_name," . $autoload_field_list;
+    $ndata = 0;
+    $keep = true;
+    $data_to_save = array();
+    foreach($records as $record) {
+
+        // Filter the results by date
+        if ($record['lra_pcr_date'] != '') {
+            $date_of_loaded_sample = date('Y-m-d', strtotime($record['lra_pcr_date']));
+            if (!empty($date_of_loaded_sample) and ($date_of_loaded_sample < $cutoff_date)) {
+                $keep = false;
+            }
+        }
+        if ($record['lra_ab_date'] != '') {
+            $date_of_loaded_sample = date('Y-m-d', strtotime($record['lra_ab_date']));
+            if (!empty($date_of_loaded_sample) and ($date_of_loaded_sample < $cutoff_date)) {
+                $keep = false;
+            }
+        }
+
+        // If we are within the cutoff limit, load this record into the DB
+        if ($keep) {
+
+            // We are going to check these records
+            $one_record = array();
+            $one_record[] = $record['record_id'];
+            $one_record[] = $record['redcap_event_name'];
+
+            $one_record[] = $record['lra_pcr_result'];
+            $one_record[] = $record['lra_pcr_date'];
+            $one_record[] = $record['lra_pcr_assay_method'];
+            $one_record[] = $record['lra_pcr_match_methods___1'];
+            $one_record[] = $record['lra_pcr_match_methods___2'];
+            $one_record[] = $record['lra_pcr_match_methods___3'];
+            $one_record[] = $record['lra_pcr_match_methods___4'];
+            $one_record[] = $record['lra_pcr_match_methods___5'];
+
+            $one_record[] = $record['lra_ab_result'];
+            $one_record[] = $record['lra_ab_date'];
+            $one_record[] = $record['lra_ab_assay_method'];
+            $one_record[] = $record['lra_ab_match_methods___1'];
+            $one_record[] = $record['lra_ab_match_methods___2'];
+            $one_record[] = $record['lra_ab_match_methods___3'];
+            $one_record[] = $record['lra_ab_match_methods___4'];
+            $one_record[] = $record['lra_ab_match_methods___5'];
+
+            // If this record is more recent than the cutoff date, save it in the DB
+            array_push($data_to_save, '("' . implode('","', $one_record) . '")');
+            $ndata++;
+
+            if (($ndata%1000) == 0) {
+                $status = $module->pushDataIntoDB($results_table, $headers, $data_to_save);
+                if ($status) {
+                    $module->emDebug("Pushed ". count($data_to_save) . " out of $ndata records from reportChanges into dB");
+                } else {
+                    $module->emDebug("Error pushing " . count($data_to_save) . " out of $ndata into DB");
+                }
+                $data_to_save = array();
+            }
+        }
+
+        // Reset keep
+        $keep = true;
+    }
+
+    // Push the current project's data into the results table
+    if (!empty($data_to_save)) {
+        $status = $module->pushDataIntoDB($results_table, $headers, $data_to_save);
+        if (!$status) {
+            $module->emDebug("Error when pushing data to table $results_table for project $project");
+            return false;
+        } else {
+            $module->emDebug("Last Push for a total number of records of $ndata into dB");
+        }
+    }
+
+    // If the data was successfully saved in the db table, keep processing
+    $status_dontcare = unmatchedLabResults($project, $dag_name, $org);
+    $status_dontcare = unmatchedMRNs($project, $dag_name, $org);
+
+    return $status;
+}
+
+/**
+ * This function will find results with MRNs that match an MRN in the project but the result does not match
+ *
+ * @param $project
+ * @param $dag_name
+ * @param $org
+ * @return bool
+ */
+function unmatchedLabResults($project, $dag_name, $org) {
+
+    global $module, $pid;
+
+    $unmatched_table = "track_covid_unmatched";
+    $unmatched_headers = array("pat_mrn_id", "pat_name", "birth_date", "spec_taken_instant",
+                                "component_abbr", "ord_value", "mpi_id", "cohort");
+
+    // Retrieve the project where the Unmatched Records will be stored
+    $unmatched_project = $module->getSystemSetting('unmatched');
+    if (empty($unmatched_project)) {
+        $module->emDebug("Project for unmatched results is not selected so skipping processing");
+        return true;
+    }
+
+    $module->truncateDb($unmatched_table);
+
+    // This is the query for matched MRNs but unmatched dates
+    $sql =
+        "select rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
+                " rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
+            " from track_covid_result_match rm, track_covid_mrn_dob mrn " .
+            " where rm.COHORT in ('" . $project . "', 'OTHER') " .
+            " and rm.pat_mrn_id = mrn.mrn " .
+            " and rm.COMPONENT_ABBR = 'PCR' " .
+            " and rm.SPEC_TAKEN_INSTANT not in " .
+            "       (select lra_pcr_date " .
+            "           from track_covid_found_results proj " .
+            "           where proj.record_id = mrn.record_id " .
+            "           and mrn.mrn = rm.pat_mrn_id " .
+            "           and proj.lra_pcr_date is not null) " .
+        " order by rm.pat_mrn_id, SPEC_TAKEN_INSTANT";
+
+    $debug_msg = "These are the results from PCR query with matched MRNs and unmatched dates for project " . $project;
+    $error_msg = "Error loading results from PCR query with matched MRNs and unmatched dates for project " . $project;
+    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
+
+
+    // This is the IGG query for matched MRNs but unmatched result dates
+    $sql =
+        "select rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
+        " rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
+        " from track_covid_result_match rm, track_covid_mrn_dob mrn " .
+        " where rm.COHORT in ('" . $project . "', 'OTHER') " .
+        " and rm.COMPONENT_ABBR = 'IGG' " .
+        " and rm.pat_mrn_id = mrn.mrn " .
+        " and rm.SPEC_TAKEN_INSTANT not in " .
+        "       (select lra_ab_date " .
+        "           from track_covid_found_results proj " .
+        "           where proj.record_id = mrn.record_id " .
+        "           and mrn.mrn = rm.pat_mrn_id " .
+        "           and proj.lra_ab_date is not null) " .
+        " order by rm.pat_mrn_id, SPEC_TAKEN_INSTANT";
+
+    $debug_msg = "These are the results from IGG query with matched MRNs and unmatched dates for project " . $project;
+    $error_msg = "Error loading results from IGG query with matched MRNs and unmatched dates for project " . $project;
+    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
+
+    $record_id = createNewRecordID($project, $org);
+    $module->emDebug("This is the new record id: " . $record_id);
+
+    // Retrieve all unique rows and load them into the Redcap project
+    $sql =
+        "with xxx as   ( " .
+        "    select distinct * " .
+        "       from track_covid_unmatched " .
+        "       where spec_taken_instant > date('2020-05-05 00:00:00') " .
+        ") " .
+        "select '" . $record_id . "', 'unmatched_results', " .
+        "   row_number() over (order by spec_taken_instant, pat_mrn_id) as redcap_repeat_instance, " .
+        "   pat_mrn_id, pat_name, birth_date, spec_taken_instant, " .
+        "   component_abbr, ord_value, mpi_id, cohort from xxx";
+    $q = db_query($sql);
+
+    // Create json objects that we can easily load into redcap.
+    $redcap_headers = array("record_id", "redcap_repeat_instrument", "redcap_repeat_instance");
+    $all_headers = array_merge($redcap_headers, $unmatched_headers);
+
+    $unmatched = array();
+    $unmatched2 = array();
+    $ncnt = 0;
+    while ($results = db_fetch_assoc($q)) {
+        $ncnt += 1;
+        if ($ncnt > 9999) {
+            $change_record_id = array_combine($all_headers, $results);
+            $change_record_id['record_id'] = $change_record_id['record_id'] . '_v2';
+            $unmatched2[] = $change_record_id;
+        } else {
+            $unmatched[] = array_combine($all_headers, $results);
+        }
+
+        // Make intermediate saves
+        if (!empty($unmatched) and (($ncnt%20) == 0)) {
+            $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched),
+                'normal', 'YMD', 'flat', $dag_name);
+            if ($ncnt % 100 == 0) {
+                $module->emDebug("Return from saveData for unmatched labs count $ncnt: " . json_encode($return));
+            }
+            $unmatched = array();
+        }
+
+        if (!empty($unmatched2) and (($ncnt%20) == 0)) {
+            $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2),
+                'normal', 'YMD', 'flat', $dag_name);
+            if ($ncnt % 100 == 0) {
+                $module->emDebug("Return from saveData for unmatched labs v2 count $ncnt: " . json_encode($return));
+            }
+            $unmatched2 = array();
+        }
+    }
+
+    // Save the record with the correct DAG
+    if (!empty($unmatched)) {
+        $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched),
+            'normal', 'YMD', 'flat', $dag_name);
+    }
+
+    if (!empty($unmatched2)) {
+        $module->emDebug("Return from saveData for unmatched labs: " . json_encode($return));
+        $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2),
+            'normal', 'YMD', 'flat', $dag_name);
+        $module->emDebug("Return from saveData unmatched labs v2 for $ncnt: " . json_encode($return));
+    } else {
+        $module->emDebug("Return from saveData for unmatched labs for $ncnt: " . json_encode($return));
+    }
+
+    return true;
+}
+
+
+function unmatchedMRNs($project, $dag_name, $org) {
+
+    global $module, $pid;
+
+    $unmatched_table = "track_covid_unmatched";
+    $unmatched_headers = array("pat_mrn_id", "pat_name", "birth_date", "spec_taken_instant",
+        "component_abbr", "ord_value", "mpi_id", "cohort");
+
+    // Retrieve the project where the Unmatched Records will be stored
+    $unmatched_project = $module->getSystemSetting('unmatched');
+    if (empty($unmatched_project)) {
+        $module->emDebug("Project for unmatched results is not selected so skipping processing");
+        return true;
+    }
+
+    $module->truncateDb($unmatched_table);
+
+    // Find the PCR results that don't have an MRN in our project - this will usually indicate that
+    // the MRN in the Redcap project is incorrect
+    $sql =
+        "select distinct rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
+        "        rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
+        "    from track_covid_result_match rm " .
+        "    where rm.pat_mrn_id not in (select mrn from track_covid_mrn_dob) " .
+        "    and rm.COHORT = '" . $project . "'" .
+        "    and rm.COMPONENT_ABBR = 'PCR' " .
+        "order by rm.pat_mrn_id, rm.SPEC_TAKEN_INSTANT";
+
+    $debug_msg = "These are the results from PCR query with unmatched MRNs for project " . $project;
+    $error_msg = "Error loading results from PCR query with unmatched MRNs for project " . $project;
+    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
+
+
+    // Find the IGG results that don't have an MRN in our project - this will usually indicate that
+    // the MRN in the Redcap project is incorrect
+    $sql =
+        "select distinct rm.pat_mrn_id, rm.pat_name, rm.birth_date, rm.spec_taken_instant, " .
+        "        rm.component_abbr, rm.ord_value, rm.mpi_id, rm.cohort " .
+        "    from track_covid_result_match rm " .
+        "    where rm.pat_mrn_id not in (select mrn from track_covid_mrn_dob) " .
+        "    and rm.COHORT = '" . $project . "'" .
+        "    and rm.COMPONENT_ABBR = 'IGG' " .
+        "order by rm.pat_mrn_id, rm.SPEC_TAKEN_INSTANT";
+
+    $debug_msg = "These are the results from IGG query with unmatched MRNs for project " . $project;
+    $error_msg = "Error loading results from IGG query with unmatched MRNs for project " . $project;
+    $status = runQueryAndLoadDB($sql, $unmatched_table, $unmatched_headers, $debug_msg, $error_msg);
+
+    $record_id = createNewRecordID($project, $org);
+    $record_id .= 'noMRNs';
+    $module->emDebug("This is the new record id: " . $record_id);
+
+    // Retrieve all unique rows and load them into the Redcap project
+    $sql =
+        "with xxx as   ( " .
+        "    select distinct * " .
+        "       from track_covid_unmatched " .
+        "       where spec_taken_instant > date('2020-05-05 00:00:00') " .
+        ") " .
+        "select '" . $record_id . "', 'unmatched_results', " .
+        "   row_number() over (order by spec_taken_instant, pat_mrn_id) as redcap_repeat_instance, " .
+        "   pat_mrn_id, pat_name, birth_date, spec_taken_instant, " .
+        "   component_abbr, ord_value, mpi_id, cohort from xxx";
+    $q = db_query($sql);
+
+    // Create json objects that we can easily load into redcap.
+    $redcap_headers = array("record_id", "redcap_repeat_instrument", "redcap_repeat_instance");
+    $all_headers = array_merge($redcap_headers, $unmatched_headers);
+
+    // Since each redcap repeating instance can only have 10,000 records, split into a new record if we
+    // go over 9999
+    $unmatched = array();
+    $unmatched2 = array();
+    $ncnt = 0;
+    while ($results = db_fetch_assoc($q)) {
+        $ncnt += 1;
+        if ($ncnt > 9999) {
+            $change_record_id = array_combine($all_headers, $results);
+            $change_record_id['record_id'] = $change_record_id['record_id'] . '_v2';
+            $unmatched2[] = $change_record_id;
+        } else {
+            $unmatched[] = array_combine($all_headers, $results);
+        }
+
+        // Make intermediate saves
+        if (!empty($unmatched) and (($ncnt%20) == 0)) {
+            $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched));
+            $module->emDebug("Return from saveData for no MRN unmatched labs (" . $ncnt. "): " . json_encode($return));
+            $unmatched = array();
+        }
+
+        if (!empty($unmatched2) and (($ncnt%20) == 0)) {
+            $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2));
+            $module->emDebug("Return from saveData for no MRN unmatched labs2 (" . $ncnt . "): " . json_encode($return));
+            $unmatched2 = array();
+        }
+
+    }
+
+    // Save the record with the correct DAG
+    if (!empty($unmatched)) {
+        $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched));
+        $module->emDebug("Return from saveData for no MRN unmatched labs (" . $ncnt. "): " . json_encode($return));
+    }
+    if (!empty($unmatched2)) {
+        $return = REDCap::saveData($unmatched_project, "json", json_encode($unmatched2));
+        $module->emDebug("Return from saveData for no MRN unmatched labs2 (" . $ncnt . "): " . json_encode($return));
+    }
+
+    return true;
+}
+
+
+function runQueryAndLoadDB($sql, $dbtable, $headers, $debug_msg, $error_msg) {
+
+    global $module;
+    $status = true;
+    $unmatched = array();
+    $header_list = implode(',', $headers);
+
+    // Run the query passed in
+    $q = db_query($sql);
+    $ncnt = 0;
+    while ($results = db_fetch_assoc($q)) {
+        array_push($unmatched, '("'. implode('","', $results) . '")');
+        if (($ncnt%1000) == 0) {
+            $status = $module->pushDataIntoDB($dbtable, $header_list, $unmatched);
+            $unmatched = array();
+        }
+        $ncnt++;
+    }
+    $module->emDebug($debug_msg . " " . count($unmatched));
+
+    if (!empty($unmatched)) {
+        $status = $module->pushDataIntoDB($dbtable, $header_list, $unmatched);
+        if (!$status) {
+            $module->emError($error_msg);
+            $status = false;
+        }
+    }
+
+    return $status;
+}
+
+function createNewRecordID($project, $org) {
+
+    $project_name = str_replace(' ', '_', $project);
+    return $project_name . "_" . $org . date('_Ymd_Gis');
+}
