@@ -35,7 +35,8 @@
         ]
 	},
 	"no-auth-pages": [
-        "pages/findResults"
+        "pages/findResults",
+        "pages/findResults_v2"
     ],
 	"project-settings": [
 		{
@@ -44,18 +45,6 @@
 			"required": false,
 			"type": "checkbox"
 		},
-        {
-            "key": "lower-limit",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Days to subtract for lower window</span></h6>Number of days to subtract to target window for lower limit",
-            "required": false,
-            "type": "text"
-        },
-        {
-            "key": "upper-limit",
-            "name": "<h6><span class='text-lg badge badge-lg badge-success'>Days to add for upper window</span></h6>Number of days to add to target window for upper limit",
-            "required": false,
-            "type": "text"
-        },
         {
             "key": "birth-date",
             "name": "<h6><span class='text-lg badge badge-lg badge-success'>Birth date field</span></h6>Field which stores the participant birthdate",
@@ -95,12 +84,6 @@
 			"type": "checkbox"
 		},
         {
-            "key": "data-url",
-            "name": "<b>Data Retrieval URL</b><br>Enter the URL of the API call used to request STARR data retrieval",
-            "required": true,
-            "type": "text"
-        },
-        {
             "key": "allowed-users-for-ucsf-loader",
             "name": "<b>Users allowed to run the UCSF loader</b><br>Comma-separated list of sunet IDs who are allowed to run the UCSF loader.",
             "required": true,
@@ -109,6 +92,12 @@
         {
             "key": "unmatched",
             "name": "<b>Unmatched Lab Project</b><br>Project which will store the unmatched lab results",
+            "required": true,
+            "type": "project-id"
+        },
+        {
+            "key": "project",
+            "name": "<b>TrackCovid Lab Project</b><br>Project which will store the retrieved lab results",
             "required": true,
             "type": "project-id"
         }

@@ -2,14 +2,33 @@
 namespace Stanford\TrackCovidConsolidator;
 /** @var \Stanford\TrackCovidConsolidator\TrackCovidConsolidator $module */
 
-$action = isset($_POST['action']) && !empty($_POST['action']) ? $_POST['action'] : null;
-$org = isset($_POST['org']) && !empty($_POST['org']) ? $_POST['org'] : null;
+use GuzzleHttp\Client;
 
-$module->emDebug("action $action and org $org");
+
+$action = isset($_GET['action']) && !empty($_GET['action']) ? $_GET['action'] : null;
+$org = isset($_GET['org']) && !empty($_GET['org']) ? $_GET['org'] : null;
+$pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
 
 if ($action == 'load' and $org == 'stanford') {
-    $module->emDebug("About to run Stanford load");
+
     $status = $module->loadStanfordData();
+
+    //$module->emDebug("About to run Stanford load");
+    //$match_url = $module->getUrl('pages/findResults_v2', true, true) . '&org=' . $org . '&pid=' . $pid;
+    //$module->emDebug("URL to load results: " . $match_url);
+
+    // Go into project context and process data for this project
+    //$client = new Client();
+    //$resp = $client->get($match_url);
+    //$module->emDebug("Back from client->get with status code " . $resp->getStatusCode());
+    //if ($resp->getStatusCode() == 200) {
+    //    $status = true;
+    //    $this->emDebug("Processing lab results for was successful");
+    //} else {
+    //    $status = false;
+    //    $this->emError("Processing lab results failed");
+    //}
+
     $module->emDebug("Sending back this: " . $status);
     print $status;
     return;
@@ -42,7 +61,7 @@ if ($action == 'load' and $org == 'stanford') {
     <body>
         <container>
             <div style="width: 90%; padding: 20px">
-                <h3 style="color:blue">Automated loader for Stanford data to load TrackCovid projects.</h3>
+                <h3 style="color:blue">Automated loader to load Stanford TrackCovid results.</h3>
             </div>
 
             <div style="padding: 20px">
@@ -65,7 +84,8 @@ if ($action == 'load' and $org == 'stanford') {
     $(function () {
         $("#submit").bind("click", function () {
             var org = 'stanford';
-            TrackCovid.loadConfig(org);
+            var pid = 39;
+            TrackCovid.loadConfig(org, pid);
         });
     });
 
@@ -73,16 +93,17 @@ if ($action == 'load' and $org == 'stanford') {
     var TrackCovid = TrackCovid || {};
 
     // Make the API call back to the server to load the new config\
-    TrackCovid.loadConfig = function(org) {
+    TrackCovid.loadConfig = function(org, pid) {
 
         // Add a busy cursor
         $("body").css("cursor", "progress");
 
         $.ajax({
-                type: "POST",
+                type: "GET",
                 data: {
                     "org"           : org,
-                    "action"        : "load"
+                    "action"        : "load",
+                    "pid"           : pid
                 },
                 success:function(status) {
                     // Return the cursor back to normal
