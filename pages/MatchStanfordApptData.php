@@ -89,12 +89,6 @@ if ($action == 'load') {
         });
     });
 
-    $(function () {
-        $("#submitVax").bind("click", function () {
-            TrackCovid.loadVaxConfig();
-        });
-    });
-
     var TrackCovid = TrackCovid || {};
 
     // Make the API call back to the server to load the new config\

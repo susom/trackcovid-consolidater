@@ -101,6 +101,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         $eventids_to_load = $this->getProjectSetting('lab-event-list');
         $event_ids = explode(",", $eventids_to_load);
+        $this->emDebug("These are the event_ids: " . json_encode($event_ids));
 
         return array($mrn_field, $birthdate_field, $baseline_event_id, $event_ids);
     }
@@ -218,6 +219,16 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             }
         }
 
+        // For UCSF datasets, convert the date from mm/dd/yy to yyyy-mm-dd
+        if ($org == 'ucsf') {
+            $converted_results = array();
+            foreach ($results as $one_result) {
+                $one_result[9] = DateTime::createFromFormat('m/d/y', $one_result[9])->format('Y-m-d');
+                $converted_results[] = $one_result;
+            }
+            $results = $converted_results;
+        }
+
         // These are left over labs so write them to the Unmatched project
         $this->emDebug("There are " . count($results) . " records that are unmatched");
         $status = $this->saveUnmatchedLabResults($org, $results);
@@ -264,7 +275,14 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                 $one_unmatched_result['collect'] =                      $one_result[3];
                 $one_unmatched_result['assay'] =                        $one_result[7];
             } else {
-                $one_unmatched_result =                                 $one_result;
+                //  0=Test, 1=Result, 2=Sample ID, 3=Accession Number, 4=MRN, 5=LastName,FirstName, 6=???
+                //  7=DEP, 8=ProviderID, 9=Date, 10=Time, 11=???, 12=Platform
+                $one_unmatched_result['mrn'] =                          $one_result[4];
+                $one_unmatched_result['contid'] =                       $one_result[2];
+                $one_unmatched_result['result'] =                       $one_result[1];
+                $one_unmatched_result['resultid'] =                     $one_result[0];
+                $one_unmatched_result['collect'] =                      $one_result[9];
+                $one_unmatched_result['assay'] =                        $one_result[12];
             }
 
             $one_unmatched_result['unmatched_results_complete'] = 2;
@@ -304,21 +322,20 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         // Loop over all results and see if we can match it in this event
         // This results array is in the following format:
-        //  0=mrn, 1=bdate, 2=contid, 3=resultid, 4=result, 5=collect
+        //  0=Test, 1=Result, 2=Sample ID, 3=Accession Number, 4=MRN, 5=LastName,FirstName, 6=???
+        //  7=DEP, 8=ProviderID, 9=Date, 10=Time, 11=???, 12=Platform
         $results_matched = array();
         $all_matches = array();
         $not_matched = array();
         foreach($results as $one_result) {
 
             // These are lab result values
-            $lab_mrn = $one_result["mrn"];
-            $lab_dob = $one_result["bdate"];
-            $lab_sample_id = $one_result["contid"];
-            $lab_sentdate = $one_result["collect"];
-            $lab_resultid = $one_result["resultid"];
-            $lab_result = $one_result["result"];
-            $lab_datetime = new DateTime($lab_sentdate);
-            $lab_date = date_format($lab_datetime, 'Y-m-d');
+            $lab_mrn = $one_result[4];
+            $lab_sample_id = $one_result[2];
+            $lab_sentdate = DateTime::createFromFormat('m/d/y', $one_result[9])->format('Y-m-d');
+            $lab_resultid = $one_result[0];
+            $lab_result = $one_result[1];
+            $lab_assay = $one_result[12];
 
             foreach($redcap_records as $record) {
 
@@ -329,42 +346,21 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                 $sent_date = $record['ucsf_date_lab'];
                 $record_id = $record['record_id'];
                 $mrn =  str_pad($mrn_records[$record_id]["mrn"], "0", 8, STR_PAD_LEFT);
-                $dob = $mrn_records[$record_id]['bdate'];
                 $found = false;
 
                 // This is the correct person, see if we can match
                 if ($mrn == $lab_mrn) {
-                    if ($pcr_id == $one_result['contid'] and $lab_resultid = 'PCR') {
-                        $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
+                    if ($pcr_id == $lab_sample_id and $lab_resultid = 'CVD19R') {
                         $results_matched['lra_pcr_result'] = ($lab_result = 'NOTD' ? 0 : 1);
                         $results_matched['lra_pcr_date'] = $lab_sentdate;
                         $results_matched['lra_pcr_match_methods___1'] = $results_matched['lra_pcr_match_methods___2'] = 1;
+                        $results_matched['lra_pcr_assay_method'] = $lab_assay;
                         $found = true;
-                    } else if ($ab_id = $one_result['contid'] and $lab_resultid = 'COVG') {
-                        $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
+                    } else if ($ab_id = $lab_sample_id and $lab_resultid = 'COVG') {
                         $results_matched['lra_ab_result_2'] = ($lab_result = 'NEG' ? 0 : 1);
                         $results_matched['lra_ab_date_2'] = $lab_sentdate;
                         $results_matched['lra_ab_match_methods_2___1'] = $results_matched['lra_ab_match_methods_2___2'] = 1;
-                        $found = true;
-                    } else if ($dob == $lab_dob and $sent_date == $lab_sentdate and $lab_resultid = 'PCR') {
-                        $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
-                        $results_matched['lra_pcr_result'] = ($lab_result = 'NOTD' ? 0 : 1);
-                        $results_matched['lra_pcr_result'] = $lab_result;
-                        $results_matched['lra_pcr_date'] = $lab_sentdate;
-                        $results_matched['lra_pcr_match_methods___1'] = $results_matched['lra_pcr_match_methods___3'] =
-                            $results_matched['lra_pcr_match_methods___5'] = 1;
-                        $found = true;
-                    } else if ($dob == $lab_dob and $sent_date == $lab_sentdate and $lab_resultid = 'COVG') {
-                        $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
-                        $results_matched['lra_ab_result_2'] = ($lab_result = 'NEG' ? 0 : 1);
-                        $results_matched['lra_ab_date_2'] = $lab_sentdate;
-                        $results_matched['lra_ab_match_methods_2___1'] = $results_matched['lra_ab_match_methods_2___3'] =
-                            $results_matched['lra_ab_match_methods_2___5'] = 1;
-                        $results_matched['lra_ab_match_methods_2___2'] = $results_matched['lra_ab_match_methods_2___4'] = 0;
+                        $results_matched['lra_ab_assay_method_2'] = $lab_assay;
                         $found = true;
                     }
 
@@ -374,6 +370,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
             // We've gone through all the records in this event and it is not matched
             if ($found) {
+                $results_matched['record_id'] = $record_id;
                 $results_matched['redcap_event_name'] = $event_name;
                 $all_matches[] = $results_matched;
             } else {
@@ -509,6 +506,29 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         // Return the unmatched results so we can test other events
         return $not_matched;
+    }
+
+
+    public function convertCsvToArrays($org, $response)
+    {
+        // The return data is in csv format.  Split on rows.
+        $results = str_getcsv($response, PHP_EOL);
+
+        // Take out the headers of the stream before returning the actual lab data
+        $start_lab_results = false;
+        $lab_results = array();
+        foreach ($results as $result) {
+            $one_result = str_getcsv($result, ',');
+            if (($org === 'stanford') and ($one_result[0] === "pat_mrn_id")) {
+                $start_lab_results = true;
+            } else if (($org === 'ucsf') and ($one_result[0] === "Test")) {
+                $start_lab_results = true;
+            } else if ($start_lab_results) {
+                $lab_results[] = $one_result;
+            }
+        }
+
+        return $lab_results;
     }
 
 }
