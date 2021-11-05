@@ -104,6 +104,13 @@
     ],
 
 	"crons": [
+        {
+            "cron_name": "retrieve_labs",
+            "cron_description": "This cron will run once a day at 11:15pm to load data into the TrackCovid REDCap project",
+            "method": "loadStanfordData",
+            "cron_hour": "23",
+            "cron_minute": "15"
+        }
     ],
 
 	"compatibility": {

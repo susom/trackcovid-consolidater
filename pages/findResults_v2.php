@@ -5,8 +5,10 @@ namespace Stanford\TrackCovidConsolidator;
 // This is just a dummy file to put in project mode
 $pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
 $org = isset($_GET['org']) && !empty($_GET['org']) ? $_GET['org'] : null;
+$module->emDebug("In findResults_v2: pid=$pid");
 
-// Lab Data will be stored in a file in the temp directory
+
+// Lab Data will be returned in $results
 $results = retrieveStanfordData($pid);
 if ($results == false) {
     $module->emError("Could not retrieve Stanford lab results for " . date('Y-m-d'));
@@ -49,6 +51,7 @@ function retrieveStanfordData($pid) {
     try {
         $rtsl = \ExternalModules\ExternalModules::getModuleInstance('redcap_to_starr_link');
         $response = $rtsl->streamData($pid, $query_name, $arm, $fields);
+        $module->emDebug("Back from retrieving data");
     } catch (Exception $ex) {
         $module->emError("Exception thrown finding Redcap to STARR Link");
         return false;

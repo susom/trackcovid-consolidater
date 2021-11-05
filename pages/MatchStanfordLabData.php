@@ -8,26 +8,26 @@ use GuzzleHttp\Client;
 $action = isset($_GET['action']) && !empty($_GET['action']) ? $_GET['action'] : null;
 $org = isset($_GET['org']) && !empty($_GET['org']) ? $_GET['org'] : null;
 $pid = isset($_GET['pid']) && !empty($_GET['pid']) ? $_GET['pid'] : null;
+$module->emDebug("PID = $pid, org = $org, action = $action");
 
 if ($action == 'load' and $org == 'stanford') {
 
-    $status = $module->loadStanfordData();
-
-    //$module->emDebug("About to run Stanford load");
-    //$match_url = $module->getUrl('pages/findResults_v2', true, true) . '&org=' . $org . '&pid=' . $pid;
-    //$module->emDebug("URL to load results: " . $match_url);
+    $module->emDebug("About to run Stanford load");
+    $match_url = $module->getUrl('pages/findResults_v2', true, true) . '&org=' . $org . '&pid=' . $pid;
+    $module->emDebug("URL to load results: " . $match_url);
 
     // Go into project context and process data for this project
     //$client = new Client();
     //$resp = $client->get($match_url);
-    //$module->emDebug("Back from client->get with status code " . $resp->getStatusCode());
-    //if ($resp->getStatusCode() == 200) {
-    //    $status = true;
-    //    $this->emDebug("Processing lab results for was successful");
-    //} else {
-    //    $status = false;
-    //    $this->emError("Processing lab results failed");
-    //}
+    $resp = http_get($match_url);
+    $module->emDebug("Back from findResults_v2 with status code " . $resp->getStatusCode());
+    if ($resp->getStatusCode() == 200) {
+        $status = true;
+        $module->emDebug("Processing lab results for was successful");
+    } else {
+        $status = false;
+        $module->emError("Processing lab results failed");
+    }
 
     $module->emDebug("Sending back this: " . $status);
     print $status;
@@ -37,6 +37,9 @@ if ($action == 'load' and $org == 'stanford') {
     $module->emError("Error in request for action $action and org $org");
     return;
 }
+
+$org = 'stanford';
+$pid = $module->getSystemSetting("project");
 
 ?>
 
@@ -66,6 +69,8 @@ if ($action == 'load' and $org == 'stanford') {
 
             <div style="padding: 20px">
                 <form method="post">
+                    <input id="pid" value="<?php echo $pid; ?>" hidden>
+                    <input id="org" value="<?php echo $org; ?>" hidden>
                     <input class="btn-lg" type="button" id="submit" value="Load Stanford Lab Results" />
                 </form>
             </div>
@@ -83,8 +88,8 @@ if ($action == 'load' and $org == 'stanford') {
 
     $(function () {
         $("#submit").bind("click", function () {
-            var org = 'stanford';
-            var pid = 39;
+            var org = $("#org").val();
+            var pid = $("#pid").val();
             TrackCovid.loadConfig(org, pid);
         });
     });
