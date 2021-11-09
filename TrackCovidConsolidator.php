@@ -324,7 +324,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         // This results array is in the following format:
         //  0=Test, 1=Result, 2=Sample ID, 3=Accession Number, 4=MRN, 5=LastName,FirstName, 6=???
         //  7=DEP, 8=ProviderID, 9=Date, 10=Time, 11=???, 12=Platform
-        $results_matched = array();
         $all_matches = array();
         $not_matched = array();
         foreach($results as $one_result) {
@@ -336,6 +335,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $lab_resultid = $one_result[0];
             $lab_result = $one_result[1];
             $lab_assay = $one_result[12];
+            $results_matched = array();
 
             foreach($redcap_records as $record) {
 
@@ -350,14 +350,15 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
                 // This is the correct person, see if we can match
                 if ($mrn == $lab_mrn) {
-                    if ($pcr_id == $lab_sample_id and $lab_resultid = 'CVD19R') {
-                        $results_matched['lra_pcr_result'] = ($lab_result = 'NOTD' ? 0 : 1);
+
+                    if ($pcr_id == $lab_sample_id and $lab_resultid == 'CVD19R') {
+                        $results_matched['lra_pcr_result'] = ($lab_result == 'DET' ? 1 : ($lab_result == 'NOTD' ? 0 : 98));
                         $results_matched['lra_pcr_date'] = $lab_sentdate;
                         $results_matched['lra_pcr_match_methods___1'] = $results_matched['lra_pcr_match_methods___2'] = 1;
                         $results_matched['lra_pcr_assay_method'] = $lab_assay;
                         $found = true;
-                    } else if ($ab_id = $lab_sample_id and $lab_resultid = 'COVG') {
-                        $results_matched['lra_ab_result_2'] = ($lab_result = 'NEG' ? 0 : 1);
+                    } else if ($ab_id == $lab_sample_id and $lab_resultid == 'COVG') {
+                        $results_matched['lra_ab_result_2'] = ($lab_result == 'POS' ? 1 : ($lab_result == 'NEG' ? 0 : 98));
                         $results_matched['lra_ab_date_2'] = $lab_sentdate;
                         $results_matched['lra_ab_match_methods_2___1'] = $results_matched['lra_ab_match_methods_2___2'] = 1;
                         $results_matched['lra_ab_assay_method_2'] = $lab_assay;
@@ -411,7 +412,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         // Loop over all results and see if we can match it in this event
         // This results array is in the following format:
         //  0=mrn, 1=name, 2=bdate, 3=taken date, 4=component, 5=result, 6=mpi_id, 7=assay
-        $results_matched = array();
         $all_matches = array();
         $not_matched = array();
         foreach($results as $one_result) {
@@ -424,6 +424,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $lab_result     = $one_result[5];
             $lab_sample_id  = $one_result[6];
             $lab_assay      = $one_result[7];
+            $results_matched = array();
 
             foreach($redcap_records as $record) {
 
@@ -442,7 +443,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                     if ((strncmp($pcr_id, $lab_sample_id, count($pcr_id)) == 0) and ($lab_component == 'PCR')) {
                         $results_matched['record_id'] = $record_id;
                         $results_matched['redcap_event_name'] = $event_name;
-                        $results_matched['lra_pcr_result'] = ($lab_result == 'Not Detected' ? 0 : 1);
+                        $results_matched['lra_pcr_result'] = ($lab_result == 'Detected' ? 1 : ($lab_result == 'Not Detected' ? 0 : 98));
                         $results_matched['lra_pcr_date'] = $lab_sentdate;
                         $results_matched['lra_pcr_assay_method'] = $lab_assay;
                         $results_matched['lra_pcr_match_methods___1'] = $results_matched['lra_pcr_match_methods___2'] = 1;
@@ -452,7 +453,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                     } else if ((strncmp($ab_id,$lab_sample_id,count($ab_id)) == 0) and ($lab_component == 'IGG')) {
                         $results_matched['record_id'] = $record_id;
                         $results_matched['redcap_event_name'] = $event_name;
-                        $results_matched['lra_ab_result'] = ($lab_result == 'Negative' ? 0 : 1);
+                        $results_matched['lra_ab_result'] = ($lab_result == 'Positive' ? 1 : ($lab_result == 'Negative' ? 0 : 98));
                         $results_matched['lra_ab_date'] = $lab_sentdate;
                         $results_matched['lra_ab_assay_method'] = $lab_assay;
                         $results_matched['lra_ab_match_methods___1'] = $results_matched['lra_ab_match_methods___2'] = 1;
@@ -462,7 +463,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                     } else if ($dob == $lab_dob and $sent_date == $lab_sentdate and $lab_component == 'PCR') {
                         $results_matched['record_id'] = $record_id;
                         $results_matched['redcap_event_name'] = $event_name;
-                        $results_matched['lra_pcr_result'] = ($lab_result == 'Not Detected' ? 0 : 1);
+                        $results_matched['lra_pcr_result'] = ($lab_result == 'Detected' ? 1 : ($lab_result == 'Not Detected' ? 0 : 98));
                         $results_matched['lra_pcr_result'] = $lab_result;
                         $results_matched['lra_pcr_date'] = $lab_sentdate;
                         $results_matched['lra_pcr_assay_method'] = $lab_assay;
@@ -473,7 +474,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                     } else if ($dob == $lab_dob and $sent_date == $lab_sentdate and $lab_component == 'IGG') {
                         $results_matched['record_id'] = $record_id;
                         $results_matched['redcap_event_name'] = $event_name;
-                        $results_matched['lra_ab_result_2'] = ($lab_result == 'Negative' ? 0 : 1);
+                        $results_matched['lra_ab_result_2'] = ($lab_result == 'Positive' ? 1 : ($lab_result == 'Negative' ? 0 : 98));
                         $results_matched['lra_ab_date_2'] = $lab_sentdate;
                         $results_matched['lra_ab_assay_method'] = $lab_assay;
                         $results_matched['lra_ab_match_methods___1'] = $results_matched['lra_ab_match_methods___3'] =
