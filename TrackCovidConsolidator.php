@@ -522,8 +522,11 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             $one_result = str_getcsv($result, ',');
             if (($org === 'stanford') and ($one_result[0] === "pat_mrn_id")) {
                 $start_lab_results = true;
-            } else if (($org === 'ucsf') and ($one_result[0] === "Test")) {
+            } else if ($org === 'ucsf') {
                 $start_lab_results = true;
+                if ($one_result[0] !== "Test") {
+                    $lab_results[] = $one_result;
+                }
             } else if ($start_lab_results) {
                 $lab_results[] = $one_result;
             }
