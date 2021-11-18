@@ -223,7 +223,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         if ($org == 'ucsf') {
             $converted_results = array();
             foreach ($results as $one_result) {
-                $one_result[9] = DateTime::createFromFormat('m/d/y', $one_result[9])->format('Y-m-d');
+                $one_result[9] = date("Y-m-d", strtotime($one_result[9]));
                 $converted_results[] = $one_result;
             }
             $results = $converted_results;
@@ -331,7 +331,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
             // These are lab result values
             $lab_mrn = $one_result[4];
             $lab_sample_id = $one_result[2];
-            $lab_sentdate = DateTime::createFromFormat('m/d/y', $one_result[9])->format('Y-m-d');
+            $lab_sentdate = date("Y-m-d", strtotime($one_result[9]));
             $lab_resultid = $one_result[0];
             $lab_result = $one_result[1];
             $lab_assay = $one_result[12];
