@@ -45,6 +45,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
         // Make an API call so we get into project context since this run by the cron
         $project_context_url = $this->getUrl('pages/findResults_v2.php', true, true) .
                                 "&pid=" . $pid . "&org=" . $org;
+        $this->emDebug("URL: $project_context_url");
         $status = http_get($project_context_url);
 
         return $status;
@@ -440,9 +441,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
                 // This is the correct person, see if we can match
                 if ($mrn == $lab_mrn) {
-                    if ((strncmp($pcr_id, $lab_sample_id, count($pcr_id)) == 0) and ($lab_component == 'PCR')) {
+                    if (($pcr_id == $lab_sample_id) and ($lab_component == 'PCR')) {
                         $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
                         $results_matched['lra_pcr_result'] = ($lab_result == 'Detected' ? 1 : ($lab_result == 'Not Detected' ? 0 : 98));
                         $results_matched['lra_pcr_date'] = $lab_sentdate;
                         $results_matched['lra_pcr_assay_method'] = $lab_assay;
@@ -450,9 +450,8 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                         $results_matched['lra_pcr_match_methods___3'] = $results_matched['lra_pcr_match_methods___4'] =
                                         $results_matched['lra_pcr_match_methods___5'] = 0;
                         $found = true;
-                    } else if ((strncmp($ab_id,$lab_sample_id,count($ab_id)) == 0) and ($lab_component == 'IGG')) {
+                    } else if (($ab_id == $lab_sample_id) and ($lab_component == 'IGG')) {
                         $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
                         $results_matched['lra_ab_result'] = ($lab_result == 'Positive' ? 1 : ($lab_result == 'Negative' ? 0 : 98));
                         $results_matched['lra_ab_date'] = $lab_sentdate;
                         $results_matched['lra_ab_assay_method'] = $lab_assay;
@@ -462,7 +461,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                         $found = true;
                     } else if ($dob == $lab_dob and $sent_date == $lab_sentdate and $lab_component == 'PCR') {
                         $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
                         $results_matched['lra_pcr_result'] = ($lab_result == 'Detected' ? 1 : ($lab_result == 'Not Detected' ? 0 : 98));
                         $results_matched['lra_pcr_date'] = $lab_sentdate;
                         $results_matched['lra_pcr_assay_method'] = $lab_assay;
@@ -472,7 +470,6 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
                         $found = true;
                     } else if ($dob == $lab_dob and $sent_date == $lab_sentdate and $lab_component == 'IGG') {
                         $results_matched['record_id'] = $record_id;
-                        $results_matched['redcap_event_name'] = $event_name;
                         $results_matched['lra_ab_result'] = ($lab_result == 'Positive' ? 1 : ($lab_result == 'Negative' ? 0 : 98));
                         $results_matched['lra_ab_date'] = $lab_sentdate;
                         $results_matched['lra_ab_assay_method'] = $lab_assay;
@@ -498,6 +495,7 @@ class TrackCovidConsolidator extends \ExternalModules\AbstractExternalModule {
 
         // Save all the matched results we found
         if (!empty($all_matches)) {
+            //$this->emDebug("Saving this data: " . json_encode($all_matches));
             $response = REDCap::saveData('json', json_encode($all_matches), 'overwrite');
             $this->emDebug("Response from save: " . json_encode($response) . " for event " . $event_name);
         } else {
